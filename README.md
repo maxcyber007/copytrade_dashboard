@@ -102,6 +102,32 @@ Two constraints carry the idempotency guarantee:
 
 Schema and index rationale: [docs/database.md](docs/database.md)
 
+## Trying it out
+
+With the app running (`npm run dev` or `docker compose up -d`):
+
+```bash
+./scripts/smoke-test.sh                       # against http://localhost:3000
+./scripts/smoke-test.sh https://your-host     # or any deployment
+```
+
+The script exercises health, registration, validation, session handling, login,
+access control, security headers, rate limiting and logout against a live server,
+using throwaway accounts with random emails so it is safe to re-run on a
+development database. It prints a pass/fail line per check.
+
+Registration is rate limited to 5 requests per hour per IP, so re-running the
+script several times in one hour will skip the registration checks. Reset the
+counter with:
+
+```bash
+redis-cli --scan --pattern 'ratelimit:register:*' | xargs -r redis-cli del
+```
+
+By hand, the same path is: open `http://localhost:3000`, create an account (the
+first one becomes ADMIN), and you land on the dashboard. Sign out, register a
+second account, and it becomes a MEMBER that is redirected away from `/admin`.
+
 ## Development
 
 ```bash
