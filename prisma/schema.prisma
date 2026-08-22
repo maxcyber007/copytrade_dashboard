@@ -25,6 +25,18 @@ enum UserStatus {
   PENDING_VERIFICATION
 }
 
+enum Platform {
+  MT4
+  MT5
+}
+
+/// MT4 accounts are always hedging. MT5 accounts may be netting, where the
+/// broker keeps a single net position per symbol instead of one per order.
+enum PositionMode {
+  HEDGING
+  NETTING
+}
+
 enum AccountType {
   DEMO
   LIVE
@@ -162,13 +174,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sessions      Session[]
-  mt5Accounts   MT5Account[]
-  subscriptions StrategySubscription[]
-  notifications Notification[]
-  auditLogs     AuditLog[]
-  planSub       Subscription?
-  payments      PaymentTransaction[]
+  sessions        Session[]
+  tradingAccounts TradingAccount[]
+  subscriptions   StrategySubscription[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  planSub         Subscription?
+  payments        PaymentTransaction[]
 
   @@index([role])
   @@index([status])
@@ -193,10 +205,10 @@ model Session {
 }
 
 // ---------------------------------------------------------------------------
-// MT5 accounts
+// Trading accounts (MT4 / MT5)
 // ---------------------------------------------------------------------------
 
-model MT5Account {
+model TradingAccount {
   id     String @id @default(cuid())
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -205,9 +217,17 @@ model MT5Account {
   broker      String
   login       String
   server      String
+  platform    Platform    @default(MT5)
   accountType AccountType @default(DEMO)
   accountRole AccountRole @default(MEMBER)
   currency    String      @default("USD")
+
+  /// Forced to HEDGING for MT4; MT5 accounts report their broker configuration.
+  positionMode  PositionMode @default(HEDGING)
+  /// Broker volume constraints, read from the account on connect.
+  brokerMinLot  Decimal      @default(0.01) @db.Decimal(10, 2)
+  brokerMaxLot  Decimal      @default(100) @db.Decimal(10, 2)
+  brokerLotStep Decimal      @default(0.01) @db.Decimal(10, 2)
 
   // Provider-side identifiers. Credentials are NEVER stored in plaintext.
   provider          String  @default("mock")
@@ -243,6 +263,7 @@ model MT5Account {
 
   @@unique([userId, login, server])
   @@index([userId])
+  @@index([platform])
   @@index([connectionStatus])
   @@index([copyStatus])
   @@index([accountRole])
@@ -261,9 +282,12 @@ model Strategy {
   status      StrategyStatus @default(DRAFT)
 
   masterAccountId   String?
-  masterAccount     MT5Account? @relation("StrategyMasterAccount", fields: [masterAccountId], references: [id], onDelete: SetNull)
+  masterAccount     TradingAccount? @relation("StrategyMasterAccount", fields: [masterAccountId], references: [id], onDelete: SetNull)
   // Human readable master identifier reported by the EA (e.g. MASTER-001)
   masterAccountCode String?
+  /// Platform of the master account. Members on the other platform can still
+  /// subscribe — symbol mapping and lot rounding bridge the difference.
+  masterPlatform    Platform        @default(MT5)
 
   minPlanTier PlanTier @default(FREE)
   isPublic    Boolean  @default(true)
@@ -291,13 +315,13 @@ model Strategy {
 }
 
 model StrategySubscription {
-  id         String     @id @default(cuid())
+  id         String         @id @default(cuid())
   userId     String
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   strategyId String
-  strategy   Strategy   @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  strategy   Strategy       @relation(fields: [strategyId], references: [id], onDelete: Cascade)
   accountId  String
-  account    MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account    TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   status     SubscriptionStatus @default(ACTIVE)
   copyStatus CopyStatus         @default(IDLE)
@@ -341,6 +365,8 @@ model CopySettings {
   copySell          Boolean @default(true)
   copySl            Boolean @default(true)
   copyTp            Boolean @default(true)
+  /// MT4 pending orders and MT5 pending orders map 1:1; the engine still checks
+  /// that the destination platform accepts the requested order type.
   copyPendingOrders Boolean @default(false)
   reverseCopy       Boolean @default(false)
 
@@ -371,9 +397,9 @@ model RiskProfile {
 
 // Rolling risk counters, one row per account (reset daily by the worker)
 model RiskState {
-  id        String     @id @default(cuid())
-  accountId String     @unique
-  account   MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id        String         @id @default(cuid())
+  accountId String         @unique
+  account   TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   tradingDay       DateTime
   dailyStartEquity Decimal   @default(0) @db.Decimal(18, 2)
@@ -397,7 +423,7 @@ model MasterTrade {
   strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
 
   masterAccountId   String?
-  masterAccount     MT5Account? @relation(fields: [masterAccountId], references: [id], onDelete: SetNull)
+  masterAccount     TradingAccount? @relation(fields: [masterAccountId], references: [id], onDelete: SetNull)
   masterAccountCode String
 
   ticket     String
@@ -441,6 +467,7 @@ model TradeEvent {
   masterTrade   MasterTrade? @relation(fields: [masterTradeId], references: [id], onDelete: SetNull)
 
   eventType         TradeEventType
+  platform          Platform       @default(MT5)
   masterAccountCode String
   ticket            String
   symbol            String
@@ -491,7 +518,7 @@ model CopyTrade {
   subscription   StrategySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   accountId String
-  account   MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account   TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   masterTradeId String?
   masterTrade   MasterTrade? @relation(fields: [masterTradeId], references: [id], onDelete: SetNull)
@@ -547,17 +574,21 @@ model PositionMapping {
   subscription   StrategySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   accountId String
-  account   MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account   TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  masterTicket String
-  memberTicket String
-  symbol       String
-  orderType    OrderType
-  volume       Decimal        @db.Decimal(10, 2)
-  openPrice    Decimal        @db.Decimal(18, 5)
-  sl           Decimal?       @db.Decimal(18, 5)
-  tp           Decimal?       @db.Decimal(18, 5)
-  status       PositionStatus @default(OPEN)
+  masterTicket  String
+  /// Current member-side ticket. On MT4 a partial close closes the original
+  /// ticket and opens a new one for the remainder, so this value is remapped
+  /// and the superseded tickets are kept in ticketHistory.
+  memberTicket  String
+  ticketHistory String[]       @default([])
+  symbol        String
+  orderType     OrderType
+  volume        Decimal        @db.Decimal(10, 2)
+  openPrice     Decimal        @db.Decimal(18, 5)
+  sl            Decimal?       @db.Decimal(18, 5)
+  tp            Decimal?       @db.Decimal(18, 5)
+  status        PositionStatus @default(OPEN)
 
   openedAt DateTime  @default(now())
   closedAt DateTime?
@@ -578,9 +609,9 @@ model SymbolMapping {
 
   // Scope: global (both null) > strategy > account. Most specific wins.
   strategyId String?
-  strategy   Strategy?   @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  strategy   Strategy?       @relation(fields: [strategyId], references: [id], onDelete: Cascade)
   accountId  String?
-  account    MT5Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account    TradingAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   masterSymbol String
   memberSymbol String

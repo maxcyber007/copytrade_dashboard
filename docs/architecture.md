@@ -9,7 +9,7 @@
 | Service | `src/services` | Business rules, orchestration | Talk to Prisma or a vendor SDK directly |
 | Repository | `src/repositories` | All database access | Contain business rules |
 | Engine | `src/services/copy`, `src/services/risk` | Copy decisions, risk decisions | Perform HTTP calls itself |
-| Provider | `src/providers` | Vendor adapters behind an interface | Leak vendor types upward |
+| Provider | `src/providers` | Vendor adapters behind one platform-neutral interface (MT4 + MT5) | Leak vendor types or platform branches upward |
 | Worker | `src/workers` | Queue consumers, background jobs | Run inside a request lifecycle |
 
 ## Request path
@@ -44,7 +44,7 @@ src/
   lib/            env, prisma, redis, crypto, errors, logger, rate limit, auth, validation
   services/       business logic
   repositories/   database access
-  providers/      mt5/, payment/ adapters behind interfaces
+  providers/      trading/ (MT4 + MT5), payment/ adapters behind interfaces
   workers/        queue definitions and worker entrypoint
   types/          shared domain types
 prisma/           schema, migrations, seed

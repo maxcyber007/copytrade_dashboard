@@ -15,10 +15,10 @@ export default async function DashboardPage() {
       </div>
 
       <Card>
-        <CardHeader title="Account overview" subtitle="Live metrics appear once an MT5 account is connected." />
+        <CardHeader title="Account overview" subtitle="Live metrics appear once a trading account is connected." />
         <EmptyState
-          title="No MT5 account connected yet"
-          description="Add and connect an MT5 account to see balance, equity, open trades and copy status here."
+          title="No trading account connected yet"
+          description="Add and connect an MT4 or MT5 account to see balance, equity, open trades and copy status here."
         />
       </Card>
     </div>

@@ -27,7 +27,7 @@ export async function GET() {
   const checks = {
     database,
     redis,
-    mt5Provider: { status: "up" as const, provider: getEnv().MT5_PROVIDER },
+    tradingProvider: { status: "up" as const, provider: getEnv().TRADING_PROVIDER },
   };
 
   const healthy = database.status === "up" && redis.status === "up";

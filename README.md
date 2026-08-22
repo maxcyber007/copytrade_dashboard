@@ -1,9 +1,13 @@
-# CopyTrade Cloud — MT5 Cloud Copy Trading Platform
+# CopyTrade Cloud — MT4 / MT5 Cloud Copy Trading Platform
 
-Cloud copy trading for MetaTrader 5. One master EA runs on the operator's VPS and
-publishes trade events to this backend; members connect their MT5 accounts through
-the web dashboard and copy strategies **without renting a VPS, installing an EA, or
-keeping a terminal open**.
+Cloud copy trading for MetaTrader. One master EA runs on the operator's VPS and
+publishes trade events to this backend; members connect their **MetaTrader 4 or
+MetaTrader 5** accounts through the web dashboard and copy strategies **without
+renting a VPS, installing an EA, or keeping a terminal open**.
+
+A member's platform is a property of their account, not a separate product: an MT5
+master can be copied to MT4 members and vice versa, with symbol mapping and lot
+rounding bridging the brokers.
 
 > **Status: Phase 1–2 complete** (project setup, database schema, authentication,
 > Docker). See [Roadmap](#roadmap) for what each later phase adds.
@@ -25,9 +29,9 @@ Service Layer  (business rules only)
    |                                        |
    |                                   Risk Engine
    |                                        |
-   +-------------------- IMT5Provider <-----+
-                              |
-                              +-- MockMT5Provider   (default, no live money)
+   +------------------ ITradeProvider <-----+
+                              |          (MT4 + MT5 behind one interface)
+                              +-- Mock providers    (default, no live money)
                               +-- MetaApiProvider   (Phase 11)
 ```
 
@@ -35,7 +39,7 @@ Layer rules, enforced by review:
 
 - Components never import Prisma, and never contain trading logic.
 - Route handlers validate + authorize, then delegate to a service.
-- Services never call a provider SDK directly — only through `IMT5Provider`.
+- Services never call a provider SDK directly — only through `ITradeProvider`.
 - Only repositories talk to the database.
 
 Details: [docs/architecture.md](docs/architecture.md)
@@ -49,7 +53,7 @@ Details: [docs/architecture.md](docs/architecture.md)
 | Database | PostgreSQL 16 + Prisma ORM |
 | Cache / Queue | Redis 7 + BullMQ (worker runs as its own process) |
 | Auth | Custom DB-backed sessions, Argon2id password hashing, `ADMIN` / `MEMBER` roles |
-| MT5 | `IMT5Provider` abstraction — `MockMT5Provider` today, MetaApi later |
+| MT4 / MT5 | `ITradeProvider` abstraction — mock providers today, MetaApi later |
 | Deployment | Docker, Docker Compose, Nginx, HTTPS |
 
 ## Installation
@@ -87,7 +91,7 @@ belongs in the repository.
 
 ## Database
 
-18 models covering identity, MT5 accounts, strategies, copy settings, risk,
+18 models covering identity, trading accounts (MT4/MT5), strategies, copy settings, risk,
 master trades, trade events, copy results, position/symbol mapping, billing,
 notifications, audit and system errors.
 
@@ -137,12 +141,16 @@ Implemented today:
 The full surface (accounts, strategies, copy control, trades, master events, admin)
 is specified in [docs/api.md](docs/api.md).
 
-## MT5 provider
+## Trading provider (MT4 + MT5)
 
-Business logic depends only on the `IMT5Provider` interface, never on a vendor SDK.
-`MockMT5Provider` (Phase 6) makes the whole system testable without a live account
-or real money; `MetaApiProvider` (Phase 11) will be written against the current
-official MetaApi documentation at that time. See [docs/mt5-provider.md](docs/mt5-provider.md).
+Business logic depends only on the `ITradeProvider` interface, never on a vendor SDK.
+One interface serves both platforms; the implementation absorbs the differences —
+MT4 is hedging-only and issues a new ticket on partial close, while MT5 may be
+netting, where the broker keeps one net position per symbol. Mock providers
+(Phase 6) make the whole system testable without a live account or real money;
+`MetaApiProvider` (Phase 11), which serves both platforms, will be written against
+the current official MetaApi documentation at that time.
+See [docs/trading-provider.md](docs/trading-provider.md).
 
 ## Copy engine
 
@@ -156,7 +164,7 @@ See [docs/copy-engine.md](docs/copy-engine.md).
 - Argon2id password hashing; sessions stored as SHA-256 hashes, raw token only in an
   httpOnly/SameSite cookie.
 - Account lockout after repeated failures, plus per-IP and per-email rate limiting.
-- MT5 credentials encrypted with AES-256-GCM; never logged, never returned to the
+- Account credentials encrypted with AES-256-GCM; never logged, never returned to the
   frontend, never placed in `localStorage`.
 - Master trade events require API key + HMAC-SHA256 signature + timestamp window +
   unique event id (replay protection).
@@ -173,7 +181,8 @@ npm run test
 
 Planned coverage (Phase 14): authentication, authorization, trade event signature
 verification, duplicate events, lot calculation for all four copy modes, risk
-limits, position and symbol mapping, retry behaviour, provider contract, and an
+limits, position and symbol mapping (including MT4 ticket remapping and MT5
+netting), retry behaviour, provider contract, and an
 integration test of the full master-trade → member-copy path.
 
 ## Roadmap
@@ -185,12 +194,12 @@ integration test of the full master-trade → member-copy path.
 | 3 | Member dashboard | next |
 | 4 | Admin dashboard | planned |
 | 5 | Strategy management | planned |
-| 6 | Mock MT5 provider | planned |
+| 6 | Mock MT4/MT5 providers | planned |
 | 7 | Master trade event API (HMAC) | planned |
 | 8 | Copy engine + worker | planned |
 | 9 | Risk engine | planned |
 | 10 | Real-time dashboard (SSE) | planned |
-| 11 | MetaApi provider | planned |
+| 11 | MetaApi provider (MT4 + MT5) | planned |
 | 12 | Subscription | planned |
 | 13 | Security hardening | planned |
 | 14 | Testing | planned |

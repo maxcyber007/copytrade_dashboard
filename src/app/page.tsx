@@ -22,10 +22,10 @@ export default async function HomePage() {
 
       <section className="flex flex-1 flex-col justify-center py-16">
         <h1 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">
-          Copy MT5 strategies from the cloud — no VPS, no EA on your machine.
+          Copy strategies from the cloud — no VPS, no EA on your machine.
         </h1>
         <p className="mt-5 max-w-xl text-base text-muted">
-          Connect your MetaTrader 5 account, pick a strategy, set your risk, and start copying.
+          Connect your MetaTrader 4 or MetaTrader 5 account, pick a strategy, set your risk, and start copying.
           The master EA runs on our infrastructure; your terminal does not have to stay open.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">

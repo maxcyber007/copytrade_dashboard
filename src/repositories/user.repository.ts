@@ -36,7 +36,7 @@ export const userRepository = {
         status: true,
         createdAt: true,
         lastLoginAt: true,
-        _count: { select: { mt5Accounts: true, subscriptions: true } },
+        _count: { select: { tradingAccounts: true, subscriptions: true } },
       },
     }),
 };

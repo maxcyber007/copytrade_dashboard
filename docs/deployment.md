@@ -52,4 +52,4 @@ keeps concurrent workers from double-copying an event.
 ## Health
 
 `GET /api/health` returns 200 when database and Redis both answer, 503 otherwise,
-with per-dependency latency and the active MT5 provider.
+with per-dependency latency and the active trading provider.

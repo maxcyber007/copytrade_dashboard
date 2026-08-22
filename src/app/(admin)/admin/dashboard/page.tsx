@@ -9,13 +9,13 @@ export default async function AdminDashboardPage() {
 
   const [members, accounts, strategies] = await Promise.all([
     prisma.user.count({ where: { role: "MEMBER" } }),
-    prisma.mT5Account.count(),
+    prisma.tradingAccount.count(),
     prisma.strategy.count(),
   ]);
 
   const stats = [
     { label: "Total members", value: members },
-    { label: "MT5 accounts", value: accounts },
+    { label: "Trading accounts", value: accounts },
     { label: "Strategies", value: strategies },
   ];
 

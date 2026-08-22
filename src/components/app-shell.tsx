@@ -5,7 +5,7 @@ import { LogoutButton } from "@/components/logout-button";
 
 const MEMBER_NAV = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/account", label: "MT5 Accounts" },
+  { href: "/account", label: "Trading Accounts" },
   { href: "/strategies", label: "Strategies" },
   { href: "/history", label: "Copy History" },
   { href: "/performance", label: "Performance" },

@@ -4,10 +4,10 @@ import { argon2id, hash } from "argon2";
 const prisma = new PrismaClient();
 
 const PLANS = [
-  { tier: PlanTier.FREE, name: "Free", priceMonthly: 0, maxAccounts: 1, maxStrategies: 1, features: ["1 MT5 account", "1 strategy"] },
-  { tier: PlanTier.BASIC, name: "Basic", priceMonthly: 19, maxAccounts: 2, maxStrategies: 2, features: ["2 MT5 accounts", "Email alerts"] },
-  { tier: PlanTier.PRO, name: "Pro", priceMonthly: 49, maxAccounts: 5, maxStrategies: 5, features: ["5 MT5 accounts", "Priority copying"] },
-  { tier: PlanTier.PREMIUM, name: "Premium", priceMonthly: 99, maxAccounts: 20, maxStrategies: 20, features: ["20 MT5 accounts", "Dedicated support"] },
+  { tier: PlanTier.FREE, name: "Free", priceMonthly: 0, maxAccounts: 1, maxStrategies: 1, features: ["1 trading account (MT4 or MT5)", "1 strategy"] },
+  { tier: PlanTier.BASIC, name: "Basic", priceMonthly: 19, maxAccounts: 2, maxStrategies: 2, features: ["2 trading accounts", "Email alerts"] },
+  { tier: PlanTier.PRO, name: "Pro", priceMonthly: 49, maxAccounts: 5, maxStrategies: 5, features: ["5 trading accounts", "Priority copying"] },
+  { tier: PlanTier.PREMIUM, name: "Premium", priceMonthly: 99, maxAccounts: 20, maxStrategies: 20, features: ["20 trading accounts", "Dedicated support"] },
 ];
 
 async function main() {

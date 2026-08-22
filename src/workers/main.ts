@@ -10,7 +10,7 @@ import { getEnv } from "@/lib/env";
  */
 async function main() {
   const env = getEnv();
-  logger.info({ event: "WORKER_STARTED", provider: env.MT5_PROVIDER, redis: "connected" });
+  logger.info({ event: "WORKER_STARTED", provider: env.TRADING_PROVIDER, redis: "connected" });
 
   const shutdown = (signal: string) => {
     logger.info({ event: "WORKER_SHUTDOWN", signal });

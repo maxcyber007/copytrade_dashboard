@@ -37,7 +37,8 @@ safety over convenience.
 
 - All configuration is validated at boot by `src/lib/env.ts`; a missing
   `ENCRYPTION_KEY` or a short `AUTH_SECRET` stops startup.
-- MT5 credentials are encrypted with AES-256-GCM before storage; the key lives only
+- Trading account credentials (MT4 and MT5 alike) are encrypted with AES-256-GCM
+  before storage; the key lives only
   in the environment.
 - Passwords, tokens, API secrets and encryption keys are in the logger's redaction
   list and can never reach a log line.

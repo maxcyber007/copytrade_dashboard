@@ -16,7 +16,8 @@ const schema = z.object({
 
   ENCRYPTION_KEY: z.string().min(1),
 
-  MT5_PROVIDER: z.enum(["mock", "metaapi"]).default("mock"),
+  // One provider serves both MT4 and MT5; the platform lives on the account.
+  TRADING_PROVIDER: z.enum(["mock", "metaapi"]).default("mock"),
   METAAPI_TOKEN: z.string().optional(),
   METAAPI_REGION: z.string().optional(),
 

@@ -28,7 +28,9 @@ and in `SystemError`, visible to admins only.
 ## Planned surface
 
 **Accounts** — `GET/POST /api/accounts`, `GET/DELETE /api/accounts/:id`,
-`POST /api/accounts/:id/connect`, `POST /api/accounts/:id/disconnect`
+`POST /api/accounts/:id/connect`, `POST /api/accounts/:id/disconnect`.
+Creating an account requires `platform` (`MT4` | `MT5`) alongside broker, login and
+server; connecting reads back the broker's position mode and volume constraints.
 
 **Strategies** — `GET /api/strategies`, `GET /api/strategies/:id`,
 `POST/PUT/DELETE /api/admin/strategies[/:id]`
@@ -58,6 +60,7 @@ Body:
   "strategyId": "STRATEGY-001",
   "eventId": "unique-event-id",
   "eventType": "OPEN",
+  "platform": "MT5",
   "masterAccount": "MASTER-001",
   "ticket": "123456789",
   "symbol": "XAUUSD",
@@ -77,10 +80,15 @@ for member execution.
 
 Event types: `OPEN`, `MODIFY`, `CLOSE`, `PARTIAL_CLOSE`, `PENDING_ORDER`, `DELETE_PENDING`.
 
+`platform` is optional and defaults to `MT5`; it records which terminal the master EA
+runs on. It does not restrict who may copy the event — MT4 and MT5 members subscribe
+to the same strategy.
+
 ## Error codes
 
 `UNAUTHORIZED`, `FORBIDDEN`, `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `RATE_LIMITED`,
 `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `INVALID_SIGNATURE`, `STALE_REQUEST`,
-`DUPLICATE_EVENT`, `MT5_CONNECTION_ERROR`, `INVALID_SYMBOL`, `INSUFFICIENT_MARGIN`,
+`DUPLICATE_EVENT`, `PLATFORM_CONNECTION_ERROR`, `PLATFORM_NOT_SUPPORTED`,
+`INVALID_SYMBOL`, `INSUFFICIENT_MARGIN`,
 `MARKET_CLOSED`, `INVALID_VOLUME`, `INVALID_STOPS`, `TIMEOUT`, `PROVIDER_ERROR`,
 `POSITION_NOT_FOUND`, `RISK_LIMIT_REACHED`, `INTERNAL_ERROR`.
