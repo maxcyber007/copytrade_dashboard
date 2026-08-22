@@ -1,0 +1,724 @@
+// Copy Trading Platform — database schema
+// Docs: docs/database.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum AccountType {
+  DEMO
+  LIVE
+}
+
+enum AccountRole {
+  MASTER
+  MEMBER
+}
+
+enum ConnectionStatus {
+  DISCONNECTED
+  CONNECTING
+  CONNECTED
+  ERROR
+}
+
+enum CopyStatus {
+  IDLE
+  COPYING
+  PAUSED
+  STOPPED
+  ERROR
+}
+
+enum StrategyStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  STOPPED
+  ARCHIVED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum LotMode {
+  FIXED
+  MULTIPLIER
+  BALANCE_RATIO
+  RISK_PERCENT
+}
+
+enum TradeEventType {
+  OPEN
+  MODIFY
+  CLOSE
+  PARTIAL_CLOSE
+  PENDING_ORDER
+  DELETE_PENDING
+}
+
+enum OrderType {
+  BUY
+  SELL
+  BUY_LIMIT
+  SELL_LIMIT
+  BUY_STOP
+  SELL_STOP
+}
+
+enum EventProcessingStatus {
+  RECEIVED
+  QUEUED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum CopyTradeStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  RETRYING
+  SKIPPED
+}
+
+enum PositionStatus {
+  OPEN
+  CLOSED
+  PARTIALLY_CLOSED
+  PENDING
+  CANCELLED
+}
+
+enum PlanTier {
+  FREE
+  BASIC
+  PRO
+  PREMIUM
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum ErrorSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ---------------------------------------------------------------------------
+// Identity & access
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  passwordHash  String
+  name          String?
+  role          Role       @default(MEMBER)
+  status        UserStatus @default(ACTIVE)
+  emailVerified DateTime?
+
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions      Session[]
+  mt5Accounts   MT5Account[]
+  subscriptions StrategySubscription[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  planSub       Subscription?
+  payments      PaymentTransaction[]
+
+  @@index([role])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  // sha256 of the raw session token; the raw token only ever lives in the cookie
+  tokenHash  String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress  String?
+  userAgent  String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// MT5 accounts
+// ---------------------------------------------------------------------------
+
+model MT5Account {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label       String
+  broker      String
+  login       String
+  server      String
+  accountType AccountType @default(DEMO)
+  accountRole AccountRole @default(MEMBER)
+  currency    String      @default("USD")
+
+  // Provider-side identifiers. Credentials are NEVER stored in plaintext.
+  provider          String  @default("mock")
+  providerAccountId String?
+  encryptedPassword String? // AES-256-GCM payload (iv:tag:ciphertext), base64
+  encryptedInvestor String?
+
+  connectionStatus ConnectionStatus @default(DISCONNECTED)
+  copyStatus       CopyStatus       @default(IDLE)
+  lastError        String?
+  lastSyncAt       DateTime?
+  connectedAt      DateTime?
+
+  // Latest known account metrics (refreshed by the sync worker)
+  balance     Decimal @default(0) @db.Decimal(18, 2)
+  equity      Decimal @default(0) @db.Decimal(18, 2)
+  margin      Decimal @default(0) @db.Decimal(18, 2)
+  freeMargin  Decimal @default(0) @db.Decimal(18, 2)
+  floatingPnl Decimal @default(0) @db.Decimal(18, 2)
+  peakEquity  Decimal @default(0) @db.Decimal(18, 2)
+  openTrades  Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions    StrategySubscription[]
+  copyTrades       CopyTrade[]
+  positionMappings PositionMapping[]
+  masterStrategies Strategy[]             @relation("StrategyMasterAccount")
+  masterTrades     MasterTrade[]
+  symbolMappings   SymbolMapping[]
+  riskState        RiskState?
+
+  @@unique([userId, login, server])
+  @@index([userId])
+  @@index([connectionStatus])
+  @@index([copyStatus])
+  @@index([accountRole])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Strategies & subscriptions
+// ---------------------------------------------------------------------------
+
+model Strategy {
+  id          String         @id @default(cuid())
+  code        String         @unique // e.g. STRATEGY-001, sent by the master EA
+  name        String
+  description String?
+  status      StrategyStatus @default(DRAFT)
+
+  masterAccountId   String?
+  masterAccount     MT5Account? @relation("StrategyMasterAccount", fields: [masterAccountId], references: [id], onDelete: SetNull)
+  // Human readable master identifier reported by the EA (e.g. MASTER-001)
+  masterAccountCode String?
+
+  minPlanTier PlanTier @default(FREE)
+  isPublic    Boolean  @default(true)
+
+  // Cached performance metrics (recomputed by the stats job)
+  totalReturnPct Decimal @default(0) @db.Decimal(10, 4)
+  maxDrawdownPct Decimal @default(0) @db.Decimal(10, 4)
+  winRatePct     Decimal @default(0) @db.Decimal(10, 4)
+  totalTrades    Int     @default(0)
+  memberCount    Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions  StrategySubscription[]
+  masterTrades   MasterTrade[]
+  tradeEvents    TradeEvent[]
+  copyTrades     CopyTrade[]
+  symbolMappings SymbolMapping[]
+
+  @@index([status])
+  @@index([isPublic])
+  @@index([masterAccountId])
+  @@index([createdAt])
+}
+
+model StrategySubscription {
+  id         String     @id @default(cuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategyId String
+  strategy   Strategy   @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  accountId  String
+  account    MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  status     SubscriptionStatus @default(ACTIVE)
+  copyStatus CopyStatus         @default(IDLE)
+
+  startedAt DateTime?
+  pausedAt  DateTime?
+  stoppedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  copySettings     CopySettings?
+  riskProfile      RiskProfile?
+  copyTrades       CopyTrade[]
+  positionMappings PositionMapping[]
+
+  @@unique([accountId, strategyId])
+  @@index([userId])
+  @@index([strategyId])
+  @@index([copyStatus])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CopySettings {
+  id             String               @id @default(cuid())
+  subscriptionId String               @unique
+  subscription   StrategySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  lotMode      LotMode @default(MULTIPLIER)
+  fixedLot     Decimal @default(0.01) @db.Decimal(10, 2)
+  multiplier   Decimal @default(1.0) @db.Decimal(10, 4)
+  balanceRatio Decimal @default(1.0) @db.Decimal(10, 4)
+  riskPercent  Decimal @default(1.0) @db.Decimal(10, 4)
+
+  maxLot  Decimal @default(10) @db.Decimal(10, 2)
+  minLot  Decimal @default(0.01) @db.Decimal(10, 2)
+  lotStep Decimal @default(0.01) @db.Decimal(10, 2)
+
+  copyBuy           Boolean @default(true)
+  copySell          Boolean @default(true)
+  copySl            Boolean @default(true)
+  copyTp            Boolean @default(true)
+  copyPendingOrders Boolean @default(false)
+  reverseCopy       Boolean @default(false)
+
+  maxOpenTrades  Int      @default(20)
+  allowedSymbols String[] @default([])
+  slippagePoints Int      @default(20)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RiskProfile {
+  id             String               @id @default(cuid())
+  subscriptionId String               @unique
+  subscription   StrategySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  maxDailyLoss           Decimal @default(0) @db.Decimal(18, 2) // absolute account currency, 0 = disabled
+  maxDailyLossPct        Decimal @default(0) @db.Decimal(10, 4)
+  maxDrawdownPct         Decimal @default(0) @db.Decimal(10, 4)
+  maxLotPerTrade         Decimal @default(0) @db.Decimal(10, 2)
+  maxTotalLot            Decimal @default(0) @db.Decimal(10, 2)
+  stopCopyOnBreach       Boolean @default(true)
+  closePositionsOnBreach Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Rolling risk counters, one row per account (reset daily by the worker)
+model RiskState {
+  id        String     @id @default(cuid())
+  accountId String     @unique
+  account   MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  tradingDay       DateTime
+  dailyStartEquity Decimal   @default(0) @db.Decimal(18, 2)
+  dailyRealizedPnl Decimal   @default(0) @db.Decimal(18, 2)
+  breached         Boolean   @default(false)
+  breachReason     String?
+  breachedAt       DateTime?
+
+  updatedAt DateTime @updatedAt
+
+  @@index([tradingDay])
+}
+
+// ---------------------------------------------------------------------------
+// Master trades & events
+// ---------------------------------------------------------------------------
+
+model MasterTrade {
+  id         String   @id @default(cuid())
+  strategyId String
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  masterAccountId   String?
+  masterAccount     MT5Account? @relation(fields: [masterAccountId], references: [id], onDelete: SetNull)
+  masterAccountCode String
+
+  ticket     String
+  symbol     String
+  orderType  OrderType
+  volume     Decimal        @db.Decimal(10, 2)
+  openPrice  Decimal        @db.Decimal(18, 5)
+  closePrice Decimal?       @db.Decimal(18, 5)
+  sl         Decimal?       @db.Decimal(18, 5)
+  tp         Decimal?       @db.Decimal(18, 5)
+  profit     Decimal?       @db.Decimal(18, 2)
+  status     PositionStatus @default(OPEN)
+
+  openedAt DateTime
+  closedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events           TradeEvent[]
+  copyTrades       CopyTrade[]
+  positionMappings PositionMapping[]
+
+  @@unique([strategyId, ticket])
+  @@index([strategyId])
+  @@index([symbol])
+  @@index([status])
+  @@index([openedAt])
+  @@index([createdAt])
+}
+
+model TradeEvent {
+  id      String @id @default(cuid())
+  // Idempotency key supplied by the master EA — the core duplicate guard
+  eventId String @unique
+
+  strategyId String
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  masterTradeId String?
+  masterTrade   MasterTrade? @relation(fields: [masterTradeId], references: [id], onDelete: SetNull)
+
+  eventType         TradeEventType
+  masterAccountCode String
+  ticket            String
+  symbol            String
+  orderType         OrderType
+  volume            Decimal        @db.Decimal(10, 2)
+  price             Decimal        @db.Decimal(18, 5)
+  sl                Decimal?       @db.Decimal(18, 5)
+  tp                Decimal?       @db.Decimal(18, 5)
+
+  // Master-side context used for balance-ratio lot sizing
+  masterBalance Decimal? @db.Decimal(18, 2)
+  masterEquity  Decimal? @db.Decimal(18, 2)
+
+  status       EventProcessingStatus @default(RECEIVED)
+  fanOutCount  Int                   @default(0)
+  errorMessage String?
+
+  occurredAt  DateTime
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  rawPayload Json
+
+  copyTrades CopyTrade[]
+
+  @@index([strategyId])
+  @@index([status])
+  @@index([eventType])
+  @@index([ticket])
+  @@index([receivedAt])
+  @@index([occurredAt])
+}
+
+// ---------------------------------------------------------------------------
+// Copy results
+// ---------------------------------------------------------------------------
+
+model CopyTrade {
+  id String @id @default(cuid())
+
+  eventId String // TradeEvent.eventId (business key, not the cuid)
+  event   TradeEvent @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+
+  strategyId String
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  subscriptionId String
+  subscription   StrategySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  masterTradeId String?
+  masterTrade   MasterTrade? @relation(fields: [masterTradeId], references: [id], onDelete: SetNull)
+
+  eventType    TradeEventType
+  masterTicket String
+  memberTicket String?
+
+  masterSymbol String
+  memberSymbol String
+  orderType    OrderType
+
+  masterVolume Decimal  @db.Decimal(10, 2)
+  memberVolume Decimal  @db.Decimal(10, 2)
+  masterPrice  Decimal  @db.Decimal(18, 5)
+  memberPrice  Decimal? @db.Decimal(18, 5)
+  sl           Decimal? @db.Decimal(18, 5)
+  tp           Decimal? @db.Decimal(18, 5)
+  profit       Decimal? @db.Decimal(18, 2)
+
+  status       CopyTradeStatus @default(PENDING)
+  attempts     Int             @default(0)
+  latencyMs    Int?
+  errorCode    String?
+  errorMessage String? // technical detail — admin only
+  skipReason   String?
+
+  // Full provider request/response for audit ("HTTP 200 is not success")
+  providerRequest  Json?
+  providerResponse Json?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  executedAt DateTime?
+
+  @@unique([eventId, accountId])
+  @@index([accountId])
+  @@index([subscriptionId])
+  @@index([strategyId])
+  @@index([status])
+  @@index([masterTicket])
+  @@index([memberTicket])
+  @@index([createdAt])
+}
+
+model PositionMapping {
+  id String @id @default(cuid())
+
+  masterTradeId String?
+  masterTrade   MasterTrade? @relation(fields: [masterTradeId], references: [id], onDelete: SetNull)
+
+  subscriptionId String
+  subscription   StrategySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  masterTicket String
+  memberTicket String
+  symbol       String
+  orderType    OrderType
+  volume       Decimal        @db.Decimal(10, 2)
+  openPrice    Decimal        @db.Decimal(18, 5)
+  sl           Decimal?       @db.Decimal(18, 5)
+  tp           Decimal?       @db.Decimal(18, 5)
+  status       PositionStatus @default(OPEN)
+
+  openedAt DateTime  @default(now())
+  closedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountId, masterTicket])
+  @@index([masterTicket])
+  @@index([memberTicket])
+  @@index([accountId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SymbolMapping {
+  id String @id @default(cuid())
+
+  // Scope: global (both null) > strategy > account. Most specific wins.
+  strategyId String?
+  strategy   Strategy?   @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  accountId  String?
+  account    MT5Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  masterSymbol String
+  memberSymbol String
+  enabled      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([strategyId, accountId, masterSymbol])
+  @@index([masterSymbol])
+  @@index([accountId])
+  @@index([strategyId])
+}
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid())
+  tier          PlanTier @unique
+  name          String
+  priceMonthly  Decimal  @default(0) @db.Decimal(10, 2)
+  currency      String   @default("USD")
+  maxAccounts   Int      @default(1)
+  maxStrategies Int      @default(1)
+  features      String[] @default([])
+  isActive      Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+  payments      PaymentTransaction[]
+}
+
+model Subscription {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  planId String
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  status             SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart DateTime           @default(now())
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([planId])
+  @@index([status])
+}
+
+model PaymentTransaction {
+  id     String            @id @default(cuid())
+  userId String
+  user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId String?
+  plan   SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  provider      String        @default("mock")
+  providerRef   String?       @unique
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("USD")
+  status        PaymentStatus @default(PENDING)
+  failureReason String?
+  metadata      Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  paidAt    DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Ops: notifications, audit, errors
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType @default(INFO)
+  title   String
+  message String
+  link    String?
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id     String  @id @default(cuid())
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action       String // USER_LOGIN, ACCOUNT_ADDED, COPY_STARTED, ...
+  resourceType String?
+  resourceId   String?
+  ipAddress    String?
+  userAgent    String?
+  metadata     Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+}
+
+model SystemError {
+  id String @id @default(cuid())
+
+  code      String
+  severity  ErrorSeverity @default(MEDIUM)
+  source    String // api | worker | provider | engine
+  message   String
+  stack     String?
+  context   Json?
+  accountId String?
+  eventId   String?
+
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([code])
+  @@index([severity])
+  @@index([source])
+  @@index([createdAt])
+}
