@@ -8,6 +8,7 @@ export const RateLimits = {
   login: { limit: 5, windowSeconds: 300 },
   register: { limit: 5, windowSeconds: 3600 },
   api: { limit: 120, windowSeconds: 60 },
+  providerApply: { limit: 5, windowSeconds: 3600 },
   masterEvents: { limit: 600, windowSeconds: 60 },
 } satisfies Record<string, RateLimitRule>;
 

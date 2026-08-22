@@ -1,16 +1,19 @@
 # CopyTrade Cloud — MT4 / MT5 Cloud Copy Trading Platform
 
-Cloud copy trading for MetaTrader. One master EA runs on the operator's VPS and
-publishes trade events to this backend; members connect their **MetaTrader 4 or
-MetaTrader 5** accounts through the web dashboard and copy strategies **without
-renting a VPS, installing an EA, or keeping a terminal open**.
+Cloud copy trading for MetaTrader, with a marketplace on both sides. Members
+connect their **MetaTrader 4 or MetaTrader 5** accounts through the web dashboard
+and copy strategies **without renting a VPS, installing an EA, or keeping a
+terminal open** — and any member can apply to become a **signal provider** and
+publish strategies of their own, on their own terms.
 
 A member's platform is a property of their account, not a separate product: an MT5
 master can be copied to MT4 members and vice versa, with symbol mapping and lot
 rounding bridging the brokers.
 
 > **Status: Phase 1–2 complete** (project setup, database schema, authentication,
-> Docker). See [Roadmap](#roadmap) for what each later phase adds.
+> Docker) plus the signal provider marketplace (application, admin review,
+> per-strategy master credentials) and the marketing site. See
+> [Roadmap](#roadmap) for what each later phase adds.
 
 ## Architecture
 
@@ -91,7 +94,8 @@ belongs in the repository.
 
 ## Database
 
-18 models covering identity, trading accounts (MT4/MT5), strategies, copy settings, risk,
+22 models covering identity, trading accounts (MT4/MT5), signal providers and
+payouts, strategies and their master API keys, copy settings, risk,
 master trades, trade events, copy results, position/symbol mapping, billing,
 notifications, audit and system errors.
 
@@ -163,9 +167,25 @@ Implemented today:
 | POST | `/api/auth/logout` | Revoke session |
 | GET | `/api/auth/session` | Current user or `null` |
 | GET | `/api/health` | Database / Redis / provider health |
+| GET/POST | `/api/provider/apply` | Own provider application: read state, or apply |
+| GET | `/api/providers` | Public marketplace listing (approved providers only) |
+| GET | `/api/admin/providers` | Admin: applications with status counts |
+| POST | `/api/admin/providers/:id/review` | Admin: approve, reject or suspend |
 
 The full surface (accounts, strategies, copy control, trades, master events, admin)
 is specified in [docs/api.md](docs/api.md).
+
+## Signal providers
+
+Any member can apply to publish strategies. Applications are always created as
+`PENDING` and reviewed by an admin; rejection and suspension require a reason the
+applicant can read, while the internal review note stays admin-only. Approved
+providers publish from their own MT4/MT5 master account, and **each strategy gets
+its own signed API key**, so one provider can never publish events into another's
+strategy and a leaked key is revoked in isolation. Providers set a performance fee,
+a monthly price, both, or neither.
+
+See [docs/provider-marketplace.md](docs/provider-marketplace.md).
 
 ## Trading provider (MT4 + MT5)
 

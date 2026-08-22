@@ -17,6 +17,19 @@ cached balance/equity/floating P&L refreshed by the sync worker. Credentials, wh
 provider requires them, live in `encryptedPassword` as an AES-256-GCM payload.
 Unique on `(userId, login, server)`.
 
+**Signal providers** — `ProviderProfile`, `ProviderPayout`
+A member who publishes strategies. The profile carries the application, its review
+state (`PENDING` / `APPROVED` / `REJECTED` / `SUSPENDED`), the reviewer, an internal
+`reviewNote` and a member-facing `publicReason`, plus commercial terms
+(`performanceFeePct`, `subscriptionPriceMonthly`) and an encrypted payout
+destination. `ProviderPayout` records earnings per period, unique on
+`(providerId, periodStart, periodEnd)`.
+
+**Master credentials** — `StrategyApiKey`
+Per-strategy credentials for the master EA: a public `keyId` and an AES-256-GCM
+encrypted HMAC secret, with `lastUsedAt`, `lastUsedIp` and `revokedAt`. The secret
+is encrypted rather than hashed because verifying an HMAC requires reading it back.
+
 **Strategies** — `Strategy`, `StrategySubscription`, `CopySettings`, `RiskProfile`, `RiskState`
 A subscription links one member account to one strategy and is unique on
 `(accountId, strategyId)`. Copy settings and the risk profile hang off the

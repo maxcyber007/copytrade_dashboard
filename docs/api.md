@@ -32,6 +32,13 @@ and in `SystemError`, visible to admins only.
 Creating an account requires `platform` (`MT4` | `MT5`) alongside broker, login and
 server; connecting reads back the broker's position mode and volume constraints.
 
+**Providers** — implemented: `GET/POST /api/provider/apply` (own application),
+`GET /api/providers` (public listing, approved only),
+`GET /api/admin/providers`, `POST /api/admin/providers/:id/review`.
+Review takes `{ decision: "APPROVE" | "REJECT" | "SUSPEND", publicReason?, reviewNote? }`;
+`publicReason` is required unless the decision is `APPROVE`. See
+[provider-marketplace.md](provider-marketplace.md).
+
 **Strategies** — `GET /api/strategies`, `GET /api/strategies/:id`,
 `POST/PUT/DELETE /api/admin/strategies[/:id]`
 
@@ -45,12 +52,13 @@ server; connecting reads back the broker's position mode and volume constraints.
 
 ## Master trade event contract (Phase 7)
 
-Headers:
+Headers (the key identifies exactly one strategy — a provider cannot publish into
+another provider's strategy):
 
 ```
-X-Api-Key: <MASTER_API_KEY>
+X-Api-Key: <StrategyApiKey.keyId>
 X-Timestamp: <unix seconds>
-X-Signature: hex(HMAC_SHA256(MASTER_API_SECRET, timestamp + "." + rawBody))
+X-Signature: hex(HMAC_SHA256(<strategy secret>, timestamp + "." + rawBody))
 ```
 
 Body:

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const SESSION_COOKIE = "ct_session";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/account", "/strategies", "/copy", "/history", "/performance", "/settings", "/admin"];
+const PROTECTED_PREFIXES = ["/dashboard", "/account", "/strategies", "/copy", "/history", "/performance", "/settings", "/provider", "/admin"];
 
 /**
  * Edge-level gate: only checks that a session cookie exists so unauthenticated

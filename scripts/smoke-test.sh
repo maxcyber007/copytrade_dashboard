@@ -171,6 +171,32 @@ check "repeated failed logins end in 429" "$(echo "$CODES" | grep -q '429' && ec
 
 # --------------------------------------------------------------------------
 echo
+echo "Signal provider application"
+APPLICATION='{"displayName":"Smoke Provider '"$RAND"'","headline":"Automated smoke test strategy","bio":"A description long enough to satisfy the minimum length requirement for a provider application submitted by the smoke test.","performanceFeePct":15,"subscriptionPriceMonthly":29}'
+
+STATUS=$(request POST /api/provider/apply "$APPLICATION" send)
+check "member can apply as a provider" "$([ "$STATUS" = "201" ] && echo 0 || echo 1)" "got $STATUS: $(cat "$BODY")"
+check "application starts as PENDING" "$(body_has '"status":"PENDING"' && echo 0 || echo 1)" "$(cat "$BODY")"
+PROVIDER_ID=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$BODY" | head -1)
+
+STATUS=$(request POST /api/provider/apply '{"displayName":"X","headline":"short","bio":"short"}' send)
+check "incomplete application returns 400" "$([ "$STATUS" = "400" ] && echo 0 || echo 1)" "got $STATUS"
+
+STATUS=$(request POST "/api/admin/providers/$PROVIDER_ID/review" '{"decision":"APPROVE"}' send)
+check "member cannot approve their own application" "$([ "$STATUS" = "403" ] && echo 0 || echo 1)" "got $STATUS"
+
+STATUS=$(request GET /api/admin/providers "" send)
+check "member cannot list applications" "$([ "$STATUS" = "403" ] && echo 0 || echo 1)" "got $STATUS"
+
+request GET /api/provider/apply "" send > /dev/null
+check "applicant never sees the internal review note" "$(body_has 'reviewNote' && echo 1 || echo 0)" "$(cat "$BODY")"
+
+STATUS=$(request GET /api/providers)
+check "public marketplace listing is reachable" "$([ "$STATUS" = "200" ] && echo 0 || echo 1)" "got $STATUS"
+check "pending provider is not listed publicly" "$(grep -q "Smoke Provider $RAND" "$BODY" && echo 1 || echo 0)" "$(cat "$BODY")"
+
+# --------------------------------------------------------------------------
+echo
 echo "Logout"
 STATUS=$(request POST /api/auth/logout "" both)
 check "logout returns 200" "$([ "$STATUS" = "200" ] && echo 0 || echo 1)" "got $STATUS"

@@ -8,12 +8,14 @@ const MEMBER_NAV = [
   { href: "/account", label: "Trading Accounts" },
   { href: "/strategies", label: "Strategies" },
   { href: "/history", label: "Copy History" },
+  { href: "/provider/apply", label: "Become a Provider" },
   { href: "/performance", label: "Performance" },
 ];
 
 const ADMIN_NAV = [
   { href: "/admin/dashboard", label: "Overview" },
   { href: "/admin/members", label: "Members" },
+  { href: "/admin/providers", label: "Providers" },
   { href: "/admin/strategies", label: "Strategies" },
   { href: "/admin/copy-trades", label: "Copy Trades" },
   { href: "/admin/errors", label: "System Errors" },

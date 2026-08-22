@@ -1,42 +1,59 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { prisma } from "@/lib/prisma";
+import { SiteHeader } from "@/components/landing/site-header";
+import { Hero } from "@/components/landing/hero";
+import { Marquee } from "@/components/landing/marquee";
+import { HowItWorks } from "@/components/landing/how-it-works";
+import { Audiences } from "@/components/landing/audiences";
+import { ProviderJourney } from "@/components/landing/provider-journey";
+import { Features } from "@/components/landing/features";
+import { Pricing, type PublicPlan } from "@/components/landing/pricing";
+import { Faq } from "@/components/landing/faq";
+import { FinalCta } from "@/components/landing/cta";
+import { SiteFooter } from "@/components/landing/site-footer";
+
+export const dynamic = "force-dynamic";
+
+/** Plans come from the database, so the page never advertises a plan that does not exist. */
+async function loadPlans(): Promise<PublicPlan[]> {
+  try {
+    const plans = await prisma.subscriptionPlan.findMany({
+      where: { isActive: true },
+      orderBy: { priceMonthly: "asc" },
+    });
+    return plans.map((plan) => ({
+      tier: plan.tier,
+      name: plan.name,
+      priceMonthly: Number(plan.priceMonthly),
+      currency: plan.currency,
+      maxAccounts: plan.maxAccounts,
+      maxStrategies: plan.maxStrategies,
+      features: plan.features,
+    }));
+  } catch {
+    // The marketing page must render even if the database is unreachable.
+    return [];
+  }
+}
 
 export default async function HomePage() {
-  const user = await getCurrentUser();
-  if (user) redirect(user.role === "ADMIN" ? "/admin/dashboard" : "/dashboard");
+  const [user, plans] = await Promise.all([getCurrentUser(), loadPlans()]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-6">
-      <header className="flex items-center justify-between py-6">
-        <span className="text-lg font-semibold tracking-tight">CopyTrade Cloud</span>
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-          <Link href="/login">
-            <Button variant="secondary" size="sm">Sign in</Button>
-          </Link>
-        </div>
-      </header>
-
-      <section className="flex flex-1 flex-col justify-center py-16">
-        <h1 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">
-          Copy strategies from the cloud — no VPS, no EA on your machine.
-        </h1>
-        <p className="mt-5 max-w-xl text-base text-muted">
-          Connect your MetaTrader 4 or MetaTrader 5 account, pick a strategy, set your risk, and start copying.
-          The master EA runs on our infrastructure; your terminal does not have to stay open.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link href="/register">
-            <Button size="lg">Create account</Button>
-          </Link>
-          <Link href="/login">
-            <Button size="lg" variant="secondary">Sign in</Button>
-          </Link>
-        </div>
-      </section>
-    </main>
+    <>
+      <SiteHeader signedIn={Boolean(user)} />
+      <main>
+        <Hero />
+        <Marquee />
+        <HowItWorks />
+        <Audiences />
+        <ProviderJourney />
+        <Features />
+        <Pricing plans={plans} />
+        <Faq />
+        <FinalCta />
+      </main>
+      <SiteFooter />
+    </>
   );
 }

@@ -54,6 +54,21 @@ safety over convenience.
 - The limiter fails open on a Redis outage so a cache incident cannot halt trading,
   while the database constraints still prevent duplicate orders.
 
+## Provider privilege boundaries
+
+- A provider application is always created as `PENDING`; the status field is not
+  accepted from the client, so a member cannot self-approve.
+- Only an admin can review an application, and the review route calls
+  `requireAdmin()` before anything else.
+- `requireApprovedProvider()` gates every provider action, so a `PENDING` or
+  `SUSPENDED` provider cannot publish.
+- The public listing uses an explicit field allowlist and filters to `APPROVED`,
+  so emails, review notes and payout details cannot leak through it.
+- Internal review notes are excluded from the applicant's own view; only the
+  member-facing `publicReason` is returned to them.
+- Each strategy has its own master API key, so a compromised provider key cannot
+  publish trade events into another provider's strategy and can be revoked alone.
+
 ## Master trade event integrity
 
 Forging a trade event would move member money, so the endpoint requires all of:
