@@ -69,7 +69,8 @@ npm run dev          # http://localhost:3000
 npm run worker:dev   # copy worker, separate terminal
 ```
 
-`npm run setup` never overwrites an existing `.env`, and is safe to re-run.
+`npm run setup` never overwrites an existing `.env`, and is safe to re-run. It is a
+Node script, so Windows needs no WSL, Git Bash or `make` — PowerShell is enough.
 Setting up by hand, or not using Docker? See
 **[docs/getting-started.md](docs/getting-started.md)** for the step-by-step path,
 the first-run walkthrough and troubleshooting.
@@ -104,8 +105,8 @@ Schema and index rationale: [docs/database.md](docs/database.md)
 With the app running (`npm run dev` or `docker compose up -d`):
 
 ```bash
-npm run smoke                                 # against http://localhost:3000
-./scripts/smoke-test.sh https://your-host     # or any deployment
+npm run smoke                                   # against http://localhost:3000
+node scripts/smoke-test.mjs https://your-host   # or any deployment
 ```
 
 The script exercises health, registration, validation, session handling, login,

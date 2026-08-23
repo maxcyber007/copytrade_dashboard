@@ -1,7 +1,8 @@
 # Running the project on a development machine
 
-Two paths. **Path A** is the fast one and works on macOS, Linux and Windows
-(Git Bash or WSL).
+Two paths. **Path A** is the fast one and works on macOS, Linux and Windows.
+Everything runs through Node, so Windows needs **no WSL, no Git Bash and no
+`make`** — plain PowerShell or Command Prompt is enough.
 
 ---
 
@@ -36,6 +37,10 @@ Verify it:
 ```bash
 npm run smoke        # 37 automated checks against the running server
 ```
+
+Both `npm run setup` and `npm run smoke` are Node scripts
+(`scripts/dev-setup.mjs`, `scripts/smoke-test.mjs`), so they behave identically on
+every platform.
 
 ---
 
@@ -145,9 +150,28 @@ check will fail.
 Change `PORT` in `.env` for the app; for PostgreSQL, edit the port mapping in
 `docker-compose.dev.yml` and the port in `DATABASE_URL`.
 
-**Windows**
-Run the shell scripts from Git Bash or WSL. `npm run dev`, `npm run test` and the
-Prisma commands work in PowerShell as-is.
+**Windows: `WSL ... execvpe(/bin/bash) failed: No such file or directory`**
+This is WSL itself, not the project: `wsl` is installed but there is no Linux
+distribution with a shell in it — commonly the case when only Docker Desktop's
+own WSL images are present. **You do not need WSL for this project.** Run
+everything in PowerShell:
+
+```powershell
+npm run setup
+npm run dev
+npm run smoke
+```
+
+If you do want WSL for other reasons, check what is installed and add a real
+distribution:
+
+```powershell
+wsl --list --verbose      # docker-desktop entries alone cannot run a shell
+wsl --install -d Ubuntu   # installs a usable distribution, then reboot
+```
+
+**Windows: `redis-cli` is not available**
+It ships with the Redis container: `docker exec -it copytrade-redis-dev redis-cli`.
 
 ---
 
