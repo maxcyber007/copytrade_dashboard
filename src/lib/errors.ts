@@ -15,6 +15,7 @@ export const ErrorCode = {
   DUPLICATE_EVENT: "DUPLICATE_EVENT",
   // trading / provider
   PLATFORM_CONNECTION_ERROR: "PLATFORM_CONNECTION_ERROR",
+  BROKER_AUTH_FAILED: "BROKER_AUTH_FAILED",
   PLATFORM_NOT_SUPPORTED: "PLATFORM_NOT_SUPPORTED",
   INVALID_SYMBOL: "INVALID_SYMBOL",
   INSUFFICIENT_MARGIN: "INSUFFICIENT_MARGIN",
@@ -45,6 +46,8 @@ const FRIENDLY: Record<string, string> = {
   STALE_REQUEST: "Request timestamp is outside the accepted window.",
   DUPLICATE_EVENT: "This event was already processed.",
   PLATFORM_CONNECTION_ERROR: "Could not reach your trading account. Check the connection.",
+  BROKER_AUTH_FAILED:
+    "Your broker rejected these credentials. Check the login, the trading (not investor) password and the exact server name, then remove this account and add it again.",
   PLATFORM_NOT_SUPPORTED: "This strategy cannot be copied to this platform.",
   INVALID_SYMBOL: "This symbol is not available on your broker.",
   INSUFFICIENT_MARGIN: "Not enough free margin to open this position.",
@@ -135,6 +138,9 @@ function defaultStatus(code: ErrorCodeValue): number {
     case ErrorCode.INSUFFICIENT_MARGIN:
     case ErrorCode.MARKET_CLOSED:
     case ErrorCode.RISK_LIMIT_REACHED:
+    // Credentials the broker rejected are the member's to correct, not an
+    // upstream failure to retry.
+    case ErrorCode.BROKER_AUTH_FAILED:
       return 422;
     case ErrorCode.PLAN_LIMIT_REACHED:
       return 402;

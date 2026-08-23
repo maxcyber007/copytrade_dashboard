@@ -80,7 +80,7 @@ export async function reconcileAccount(accountId: string): Promise<AccountReconc
       lastSyncAt: new Date(),
       // Reaching the broker again clears an earlier failure.
       ...(account.connectionStatus === "ERROR" || account.lastError
-        ? { connectionStatus: "CONNECTED" as const, lastError: null }
+        ? { connectionStatus: "CONNECTED" as const, lastError: null, lastErrorCode: null }
         : {}),
     },
   });

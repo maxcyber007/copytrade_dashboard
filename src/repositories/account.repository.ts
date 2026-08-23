@@ -22,6 +22,7 @@ export const safeAccountSelect = {
   connectionStatus: true,
   copyStatus: true,
   lastError: true,
+  lastErrorCode: true,
   lastSyncAt: true,
   connectedAt: true,
   balance: true,

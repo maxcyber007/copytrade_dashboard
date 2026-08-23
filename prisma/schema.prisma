@@ -281,6 +281,8 @@ model TradingAccount {
   connectionStatus ConnectionStatus @default(DISCONNECTED)
   copyStatus       CopyStatus       @default(IDLE)
   lastError        String?
+  /** Error code behind lastError, so a retry can be refused on its merits. */
+  lastErrorCode    String?
   lastSyncAt       DateTime?
   connectedAt      DateTime?
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { MetaApiProvider, describeApiError } from "@/providers/trading/MetaApiProvider";
+import { MetaApiProvider, describeApiError, isBrokerAuthFailure } from "@/providers/trading/MetaApiProvider";
 import type {
   MetaApiAccountInformation,
   MetaApiConstructor,
@@ -546,5 +546,41 @@ describe("a token without provisioning access", () => {
     // Creating a second account for one login is billed twice and leaves two
     // terminals fighting over the same broker session.
     expect(sdk.state.createdAccounts).toHaveLength(0);
+  });
+});
+
+describe("a broker that refuses the credentials", () => {
+  const brokerRefusal = () =>
+    Object.assign(
+      new Error(
+        "We failed to authenticate to your broker using credentials provided. This means that there is an " +
+          '"Invalid account" or "Account disabled" error on the trading terminal.',
+      ),
+      { status: 400, details: "E_AUTH" },
+    );
+
+  it("is recognised as the member's problem, not a transient provider failure", async () => {
+    const sdk = makeSdk({ refuseProvisioning: brokerRefusal() });
+
+    const attempt = makeProvider(sdk).connectAccount({
+      accountId: "acc-1",
+      platform: "MT5",
+      login: "123456",
+      server: "Fake-Server",
+      broker: "Fake Broker",
+      password: "wrongpassword",
+    });
+
+    // Retrying cannot succeed, and MetaApi reserves the right to charge for
+    // each repeated authentication failure.
+    await expect(attempt).rejects.toMatchObject({ code: "BROKER_AUTH_FAILED" });
+  });
+
+  it("is told apart from a MetaApi failure of any other kind", () => {
+    expect(isBrokerAuthFailure(brokerRefusal())).toBe(true);
+    expect(isBrokerAuthFailure(Object.assign(new Error("rate limited"), { status: 429 }))).toBe(false);
+    expect(isBrokerAuthFailure(Object.assign(new Error("nope"), { status: 400, details: { code: "E_SRV_NOT_FOUND" } }))).toBe(
+      false,
+    );
   });
 });

@@ -75,7 +75,20 @@ export async function connectAccount(id: string, userId: string, meta: RequestMe
   }
 
   assertPlatformSupported(account.platform);
-  await accountRepository.update(id, { connectionStatus: "CONNECTING", lastError: null });
+
+  // The broker already rejected these exact credentials. Trying again cannot
+  // succeed — nothing about them has changed — and the provider may charge for
+  // each repeated authentication failure, so the member is told what to fix
+  // instead of being allowed to hammer the button.
+  if (account.lastErrorCode === ErrorCode.BROKER_AUTH_FAILED) {
+    throw new AppError(
+      ErrorCode.BROKER_AUTH_FAILED,
+      "These credentials were already rejected by the broker. Remove this account and add it again with the " +
+        "corrected login, trading password and server name.",
+    );
+  }
+
+  await accountRepository.update(id, { connectionStatus: "CONNECTING", lastError: null, lastErrorCode: null });
 
   try {
     const provider = getTradeProvider();
@@ -110,6 +123,7 @@ export async function connectAccount(id: string, userId: string, meta: RequestMe
       connectedAt: new Date(),
       lastSyncAt: new Date(),
       lastError: null,
+      lastErrorCode: null,
     });
 
     logEvent({ event: "ACCOUNT_CONNECTED", accountId: id, platform: account.platform });
@@ -124,7 +138,13 @@ export async function connectAccount(id: string, userId: string, meta: RequestMe
     return updated;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Connection failed";
-    await accountRepository.update(id, { connectionStatus: "ERROR", lastError: message });
+    await accountRepository.update(id, {
+      connectionStatus: "ERROR",
+      lastError: message,
+      // Recorded so a retry can be refused on its merits rather than by
+      // matching on a provider's wording.
+      lastErrorCode: error instanceof AppError ? error.code : null,
+    });
     logErrorEvent({ event: "ACCOUNT_CONNECT_FAILED", accountId: id, reason: message });
 
     if (error instanceof AppError) throw error;

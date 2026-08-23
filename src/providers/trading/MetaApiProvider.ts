@@ -318,6 +318,16 @@ export class MetaApiProvider implements ITradeProvider {
     } catch (error) {
       const status = (error as { status?: number }).status;
 
+      // The broker refused the credentials. MetaApi reserves the right to
+      // charge for repeated occurrences, so this must not read as a transient
+      // failure worth retrying — it is the member's login, password or server
+      // name that has to change.
+      if (isBrokerAuthFailure(error)) {
+        const described = describeApiError(error);
+        logErrorEvent({ event: "METAAPI_BROKER_AUTH_FAILED", reason: described });
+        throw new AppError(ErrorCode.BROKER_AUTH_FAILED, described);
+      }
+
       // 401/403 here is about the token, not the broker: MetaApi accepted the
       // request and refused the permission. Saying "check the connection" would
       // send whoever reads this looking in the wrong place.
@@ -589,6 +599,22 @@ function toProviderPosition(position: MetaApiPosition): ProviderPosition {
     // comment, which is where the copy engine looks for it.
     comment: position.clientId ?? position.comment,
   };
+}
+
+/**
+ * Whether MetaApi is reporting that the *broker* refused the credentials, as
+ * opposed to anything about MetaApi itself. It answers `E_AUTH` in the details
+ * of a 400; the message wording is checked too, because a details object is not
+ * guaranteed on every path.
+ */
+export function isBrokerAuthFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const details = (error as { details?: unknown }).details;
+
+  if (typeof details === "string" && details.includes("E_AUTH")) return true;
+  if (details !== undefined && JSON.stringify(details ?? "").includes("E_AUTH")) return true;
+
+  return /failed to authenticate to your broker|invalid account|account disabled/i.test(error.message);
 }
 
 /** Keys whose values must never reach a log. */

@@ -131,6 +131,16 @@ places. Either widen the token, or create the account once in the MetaApi
 dashboard with the same login and server: the provider looks for an existing
 account first and reuses it, which also avoids paying for the same login twice.
 
+### When the broker refuses the credentials
+
+MetaApi answers `HTTP 400` with `E_AUTH` when the broker rejects the login,
+password or server name, and **reserves the right to charge for each repeated
+occurrence**. So this is not treated as a failure to retry: it becomes
+`BROKER_AUTH_FAILED`, is stored on the account as `lastErrorCode`, and a further
+Connect on the same account is refused before the provider is called at all. The
+member is told to correct the credentials and add the account again — which is
+the only thing that can change the outcome.
+
 A failed MetaApi call is reported with its HTTP status and, for a validation
 failure, the `details` object naming the field it rejected — the `message` alone
 is often just a request id. Anything credential-shaped in those details is
