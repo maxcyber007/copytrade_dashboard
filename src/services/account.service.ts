@@ -1,4 +1,5 @@
 import { accountRepository } from "@/repositories/account.repository";
+import { prisma } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import { AppError, ErrorCode } from "@/lib/errors";
 import { logEvent, logErrorEvent } from "@/lib/logger";
@@ -188,6 +189,50 @@ export async function syncAccount(id: string, userId: string) {
     openTrades: positions.length,
     lastSyncAt: new Date(),
   });
+}
+
+/**
+ * Guarantees the calling process has a live provider session for this account.
+ *
+ * Sessions live in the provider client, not in the database, so a process that
+ * did not perform the original connect — the copy worker, or the web tier after
+ * a restart — has none. Rather than failing the copy, the session is
+ * re-established from the stored credentials and the work continues.
+ */
+export async function ensureProviderSession(accountId: string): Promise<string> {
+  const account = await prisma.tradingAccount.findUnique({ where: { id: accountId } });
+  if (!account) throw new AppError(ErrorCode.NOT_FOUND, "Trading account not found");
+  if (account.connectionStatus !== "CONNECTED") {
+    throw new AppError(ErrorCode.PLATFORM_CONNECTION_ERROR, "Account is not connected");
+  }
+  if (!account.providerAccountId || !account.encryptedPassword) {
+    throw new AppError(ErrorCode.PLATFORM_CONNECTION_ERROR, "No stored provider session for this account");
+  }
+
+  const provider = getTradeProvider();
+
+  try {
+    await provider.getAccountInfo(account.providerAccountId);
+    return account.providerAccountId;
+  } catch {
+    // No session in this process — re-establish it from the stored credentials.
+    const result = await provider.connectAccount({
+      accountId: account.id,
+      platform: account.platform,
+      login: account.login,
+      server: account.server,
+      broker: account.broker,
+      password: decryptSecret(account.encryptedPassword),
+    });
+
+    logEvent({ event: "PROVIDER_SESSION_REESTABLISHED", accountId, platform: account.platform });
+
+    if (result.providerAccountId !== account.providerAccountId) {
+      await accountRepository.update(accountId, { providerAccountId: result.providerAccountId });
+    }
+
+    return result.providerAccountId;
+  }
 }
 
 /** Live positions for the dashboard. Returns an empty list when disconnected. */

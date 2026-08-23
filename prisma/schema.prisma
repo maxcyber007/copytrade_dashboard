@@ -618,6 +618,11 @@ model TradeEvent {
   masterBalance Decimal? @db.Decimal(18, 2)
   masterEquity  Decimal? @db.Decimal(18, 2)
 
+  /// Fraction of the master position closed by a PARTIAL_CLOSE, computed at
+  /// ingest while the pre-close volume is still known. The worker runs later,
+  /// by which time the master trade already holds the remaining volume.
+  closeFraction Decimal? @db.Decimal(10, 6)
+
   status       EventProcessingStatus @default(RECEIVED)
   fanOutCount  Int                   @default(0)
   errorMessage String?

@@ -50,6 +50,7 @@ export default async function AdminCopyTradesPage() {
               <Th>Member</Th>
               <Th>Strategy</Th>
               <Th>Symbol</Th>
+              <Th>Event</Th>
               <Th className="text-right">Master / member lot</Th>
               <Th>Master ticket</Th>
               <Th>Member ticket</Th>
@@ -65,6 +66,7 @@ export default async function AdminCopyTradesPage() {
                 <Td className="text-xs">{trade.account.user.email}</Td>
                 <Td>{trade.strategy.code}</Td>
                 <Td>{trade.memberSymbol}</Td>
+                <Td className="text-xs">{trade.eventType}</Td>
                 <Td className="text-right tabular-nums">
                   {toNumber(trade.masterVolume).toFixed(2)} / {toNumber(trade.memberVolume).toFixed(2)}
                 </Td>

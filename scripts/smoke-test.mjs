@@ -10,6 +10,8 @@
  * against a live server. Accounts use random emails, so it is safe to re-run
  * against a development database.
  */
+import { createHmac } from "node:crypto";
+
 const BASE = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 
 const useColour = process.stdout.isTTY && process.env.NO_COLOR === undefined;
@@ -391,6 +393,67 @@ console.log("\nProvider publishing");
     body: { code: `SMOKE-${rand}`.slice(0, 20).toUpperCase(), name: "Smoke provider strategy" },
   });
   check("unapproved member cannot publish a strategy", created.status === 403, `got ${created.status}`);
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nMaster trade event API");
+// Forging one of these would move member money, so every guard is checked.
+{
+  const event = {
+    strategyId: "STRATEGY-001",
+    eventId: `smoke-event-${rand}`,
+    eventType: "OPEN",
+    masterAccount: "MASTER-001",
+    ticket: `${rand}`.slice(0, 9),
+    symbol: "XAUUSD",
+    orderType: "BUY",
+    volume: 0.1,
+    price: 3345.2,
+    timestamp: new Date().toISOString(),
+  };
+  const body = JSON.stringify(event);
+  const now = Math.floor(Date.now() / 1000).toString();
+
+  async function postEvent(headers, rawBody = body) {
+    const response = await fetch(`${BASE}/api/master/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: rawBody,
+    });
+    const text = await response.text();
+    return { status: response.status, text };
+  }
+
+  const noAuth = await postEvent({});
+  check("unsigned event is rejected", noAuth.status === 401, `got ${noAuth.status}`);
+
+  const badKey = await postEvent({
+    "X-Api-Key": "ct_not_a_real_key",
+    "X-Timestamp": now,
+    "X-Signature": "0".repeat(64),
+  });
+  check("unknown API key is rejected", badKey.status === 401, `got ${badKey.status}`);
+
+  // A wrong signature with a real-looking key must fail the same way.
+  const badSignature = await postEvent({
+    "X-Api-Key": "ct_wrong_but_shaped_like_a_key",
+    "X-Timestamp": now,
+    "X-Signature": createHmac("sha256", "guessed-secret").update(`${now}.${body}`).digest("hex"),
+  });
+  check("wrong signature is rejected", badSignature.status === 401, `got ${badSignature.status}`);
+
+  const staleTs = (Math.floor(Date.now() / 1000) - 3600).toString();
+  const stale = await postEvent({
+    "X-Api-Key": "ct_not_a_real_key",
+    "X-Timestamp": staleTs,
+    "X-Signature": createHmac("sha256", "x").update(`${staleTs}.${body}`).digest("hex"),
+  });
+  // The timestamp window is checked before the key, so an old capture is stale
+  // whether or not the attacker holds a valid key.
+  check("stale timestamp is rejected", stale.status === 400, `got ${stale.status}`);
+
+  const wrongMethod = await request("GET", "/api/master/events", { cookies: false });
+  check("GET on the event endpoint is refused", wrongMethod.status === 404, `got ${wrongMethod.status}`);
 }
 
 // ---------------------------------------------------------------------------

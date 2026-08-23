@@ -1,89 +1,140 @@
-# Copy engine (Phase 8–9 design)
+# Copy engine
 
 ```
-Master EA --> POST /api/master/events --> TradeEvent (unique eventId)
-                                            |
-                                     BullMQ copy queue
-                                            |
-                                       Copy worker
-                                            |
-                    +-----------------------+------------------------+
-                    |                       |                        |
-             Copy settings            Risk engine            Symbol mapping
-                    |                       |                        |
-                    +----------> ITradeProvider.openPosition --------+
-                                            |
-                                CopyTrade + PositionMapping
+Master EA
+   │  POST /api/master/events   (API key + HMAC + timestamp + eventId)
+   ▼
+Trade Event API ──► TradeEvent  (eventId UNIQUE)
+   │                    │
+   │                    ▼
+   │              BullMQ copy queue      jobId = eventId
+   ▼                    │
+ 202 Accepted           ▼
+                   Copy worker (own process, concurrency 5)
+                        │
+        ┌───────────────┼────────────────┬──────────────────┐
+        ▼               ▼                ▼                  ▼
+  Symbol mapping   Lot calculator    Risk engine      ITradeProvider
+        │               │                │                  │
+        └───────────────┴────────────────┴──────────────────┘
+                        ▼
+              CopyTrade + PositionMapping
 ```
 
-## Worker steps
+## Accepting an event
 
-1. Load the event; stop if it is already `PROCESSED`.
-2. Load active subscriptions for the strategy whose account is `CONNECTED` and whose
-   copy status is `COPYING`.
-3. For each subscription, create the `CopyTrade` row first, inside the
-   `(eventId, accountId)` unique constraint. A duplicate insert means the work is
-   already done or in flight — the job stops there instead of sending an order.
-4. Resolve the member symbol via symbol mapping; `SKIPPED` with `INVALID_SYMBOL` if
-   there is no mapping and the raw symbol is unknown to the account.
-5. Calculate volume (below), clamp to the member's copy settings and then to the
-   broker's own `brokerMinLot` / `brokerMaxLot` / `brokerLotStep`, which differ
-   between an MT4 and an MT5 broker.
-6. Ask the risk engine; a breach records `SKIPPED` with `RISK_LIMIT_REACHED` and,
-   when configured, pauses copying for that subscription.
-7. Send the order through `ITradeProvider` and store request, response, provider
-   ticket, latency and execution status.
-8. On success write the `PositionMapping` so later MODIFY/CLOSE events resolve.
+`POST /api/master/events` verifies four things before the body is even parsed,
+because a forged event moves member money:
+
+| Guard | Failure |
+|---|---|
+| `X-Api-Key` resolves to a live, unrevoked `StrategyApiKey` | 401 |
+| `X-Signature` = `HMAC_SHA256(secret, "<timestamp>.<raw body>")`, compared in constant time | 401 `INVALID_SIGNATURE` |
+| `X-Timestamp` within `MASTER_EVENT_MAX_SKEW_SECONDS` | 400 `STALE_REQUEST` |
+| `eventId` not seen before (Redis nonce, then the unique index) | 200 `DUPLICATE` |
+
+The signature covers the **raw** body. Verifying a re-serialised object would
+prove nothing about what was actually sent.
+
+**The key decides the strategy**, not the payload: a provider's key can only ever
+write into that provider's strategy. The platform-wide `MASTER_API_KEY` is
+accepted only for `PLATFORM`-owned strategies.
+
+The endpoint stores the event and returns `202` — it never waits for member
+execution. A duplicate returns `200` with `status: "DUPLICATE"`, because retrying
+is the correct behaviour for an EA that did not see a response.
+
+## Fan-out
+
+The worker loads subscriptions that are `ACTIVE`, `COPYING`, and whose account is
+`CONNECTED`, then for each member:
+
+1. **Establish a provider session.** Sessions live in the provider client, not the
+   database, so the worker — a different process — may hold none. It reconnects
+   from the stored credentials instead of failing the copy.
+2. **Create the `CopyTrade` row first.** This is the idempotency lock: the unique
+   `(eventId, accountId)` constraint means a duplicate insert proves the work is
+   already done or in flight, and **no order is sent**.
+3. **Resolve the symbol** (account → strategy → global mapping).
+4. **Size the trade** with the lot calculator, clamped to the member's bounds,
+   then the broker's, then rounded **down** to the broker's step.
+5. **Ask the risk engine.** A breach either skips this trade or pauses copying.
+6. **Send the order** and record the request, the provider response, the broker
+   ticket, the latency and the execution status.
+7. **Write the `PositionMapping`** so a later MODIFY or CLOSE resolves.
 
 ## Lot calculation
 
 | Mode | Formula |
 |---|---|
 | `FIXED` | `fixedLot` |
-| `MULTIPLIER` | `masterVolume * multiplier` |
-| `BALANCE_RATIO` | `masterVolume * (memberBalance / masterBalance) * balanceRatio` |
-| `RISK_PERCENT` | volume such that the distance to SL risks `riskPercent` of member equity |
+| `MULTIPLIER` | `masterVolume × multiplier` |
+| `BALANCE_RATIO` | `masterVolume × (memberBalance ÷ masterBalance) × balanceRatio` |
+| `RISK_PERCENT` | volume such that the distance to the stop risks `riskPercent` of equity |
 
-The result is always clamped to `[minLot, maxLot]` and rounded down to the broker's
-lot step. `RISK_PERCENT` requires a stop loss; without one the trade is skipped
-rather than sized on a guess.
+Every mode ends the same way: clamp to `[minLot, maxLot]`, then to the broker's
+`[brokerMinLot, brokerMaxLot]`, then round down to `brokerLotStep`. Rounding down
+matters — rounding up could push a member past their own maximum.
 
-## Retry
+Two modes refuse rather than guess: `BALANCE_RATIO` without a reported master
+balance, and `RISK_PERCENT` without a stop loss. If rounding leaves less than the
+broker minimum, the copy is skipped as `INVALID_VOLUME` instead of sending an
+order the broker would reject.
 
-Three attempts with exponential backoff (1s, 2s, 4s). Before every retry the worker
-re-reads live positions from the provider: if a position matching this
-`(eventId, accountId)` already exists, the attempt is recorded as success instead of
-sending a second order. This is what makes a retry safe on a real money account.
+## Risk engine
 
-## Success definition
+Pure functions over a snapshot, so they are exhaustively unit-tested and reusable
+by any pre-trade check. Zero means *disabled* for every limit.
 
-An HTTP 200 from a provider is not a fill. A copy counts as `SUCCESS` only when the
-provider returns an execution result carrying a broker ticket. Anything else is
-`FAILED` with an error code, or `RETRYING` while attempts remain.
+**Per-trade skips:** direction filters, pending-order opt-in, allowed symbols,
+max open trades, max lot per trade, max total exposure.
 
-## Position and symbol resolution
+**Account breaches** — these pause copying, notify the member and record
+`RiskState.breached`: maximum daily loss (absolute or percent) and maximum
+drawdown from peak equity. Copying stays paused until the member restarts it;
+the engine never re-arms itself.
 
-`PositionMapping` is keyed on `(accountId, masterTicket)`. A `MODIFY` event looks up
-each member's ticket through it before sending a modification; a member with no
-mapping (they subscribed after the position opened) is skipped, not guessed at.
+## Modify, close and partial close
 
-## MT4 and MT5 members on the same strategy
+A MODIFY or CLOSE resolves through `PositionMapping (accountId, masterTicket)`.
+A member with no mapping — they subscribed after the position opened — is skipped,
+never guessed at.
 
-The strategy's master may run on either platform, and members of both platforms can
-subscribe to it. Two platform differences reach the engine:
+**Partial closes are proportional, and the fraction is computed at ingest.** The
+event carries the volume the master closed, which is only meaningful against the
+volume that was open before it. The worker runs later, by which time the master
+trade already holds the remainder, so `TradeEvent.closeFraction` is computed and
+stored while the pre-close volume is still known. A master closing half its
+position closes half of the member's, whatever size theirs is.
 
-**MT4 partial close remaps the ticket.** MT4 closes the original ticket and opens a
-new one for the remaining volume. On a `PARTIAL_CLOSE`, the engine reads
-`OrderResult.remainderTicket`, moves the old id into `PositionMapping.ticketHistory`
-and stores the new one as `memberTicket`, so the next `MODIFY` or `CLOSE` still
-resolves. Without this the remainder would be orphaned on the member account.
+**MT4 remaps the ticket.** A partial close on MT4 closes the original ticket and
+opens a new one for the remainder, returned as `OrderResult.remainderTicket`. The
+mapping moves to the new ticket and keeps the old one in `ticketHistory`; without
+that the leftover position would be orphaned.
 
-**MT5 netting merges positions.** On a netting account the broker keeps one net
-position per symbol, so a second copied order on the same symbol does not create a
-second ticket. The worker reads `TradingAccount.positionMode` first: for netting
-accounts a close is sent *by volume* against the net position instead of by ticket,
-and the mapping records the net position's ticket. MT4 accounts are always hedging,
-so the by-ticket path always applies there.
+## Retries
 
-Volume is clamped per account, so an MT4 broker with a 0.1 lot step and an MT5
-broker with a 0.01 step both receive a volume they can actually fill.
+Three attempts with exponential backoff (1s, 2s, 4s). The job id is the event id,
+so the queue holds one job per event. Two things make a retry safe:
+
+- The `CopyTrade` row already exists, so a retry cannot create a second copy.
+- Before opening, the worker reads live positions and looks for one carrying this
+  copy's id as its comment. If the previous attempt did land, the result is
+  recorded as a success instead of sending a second order.
+
+## Success
+
+**An HTTP 200 from a provider is not a fill.** A copy is `SUCCESS` only when the
+provider returns `executed: true` with a broker ticket. Anything else is `FAILED`
+with an error code, `RETRYING` while attempts remain, or `SKIPPED` with a reason
+the member can read.
+
+## Demo mode
+
+```bash
+npm run demo
+```
+
+Signs a master event exactly as an EA would and drives OPEN → MODIFY →
+PARTIAL_CLOSE → CLOSE through the whole chain, including a replayed event, a
+forged signature and a stale timestamp. Requires the app and `npm run worker`.

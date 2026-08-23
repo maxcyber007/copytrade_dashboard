@@ -1,24 +1,28 @@
 import "dotenv/config";
 import { logger } from "@/lib/logger";
 import { getEnv } from "@/lib/env";
+import { startCopyWorker } from "./copy.worker";
 
 /**
- * Worker entrypoint. Runs as its own process (see docker-compose `worker`
- * service) so that restarting the web tier never interrupts copy execution.
- *
- * Copy and position-sync workers are registered here in Phase 8.
+ * Worker entrypoint. Runs as its own process (see the `worker` service in
+ * docker-compose) so restarting the web tier never interrupts an in-flight copy
+ * and the worker can be scaled independently of web traffic.
  */
 async function main() {
   const env = getEnv();
-  logger.info({ event: "WORKER_STARTED", provider: env.TRADING_PROVIDER, redis: "connected" });
+  const worker = startCopyWorker();
 
-  const shutdown = (signal: string) => {
+  logger.info({ event: "WORKER_STARTED", provider: env.TRADING_PROVIDER, queues: ["copy-trade"] });
+
+  const shutdown = async (signal: string) => {
     logger.info({ event: "WORKER_SHUTDOWN", signal });
+    // Let an in-flight copy finish rather than abandoning a half-sent order.
+    await worker.close();
     process.exit(0);
   };
 
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
 main().catch((error) => {

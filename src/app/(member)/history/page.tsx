@@ -33,6 +33,7 @@ export default async function HistoryPage() {
               <Th>Strategy</Th>
               <Th>Account</Th>
               <Th>Symbol</Th>
+              <Th>Event</Th>
               <Th>Type</Th>
               <Th className="text-right">Master lot</Th>
               <Th className="text-right">Your lot</Th>
@@ -53,6 +54,7 @@ export default async function HistoryPage() {
                     <span className="block text-xs text-muted">master: {trade.masterSymbol}</span>
                   )}
                 </Td>
+                <Td className="text-xs">{trade.eventType}</Td>
                 <Td>{trade.orderType}</Td>
                 <Td className="text-right tabular-nums">{toNumber(trade.masterVolume).toFixed(2)}</Td>
                 <Td className="text-right tabular-nums">{toNumber(trade.memberVolume).toFixed(2)}</Td>

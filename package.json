@@ -21,7 +21,8 @@
     "setup": "node scripts/dev-setup.mjs",
     "dev:infra": "docker compose -f docker-compose.dev.yml up -d",
     "dev:infra:down": "docker compose -f docker-compose.dev.yml down",
-    "smoke": "node scripts/smoke-test.mjs"
+    "smoke": "node scripts/smoke-test.mjs",
+    "demo": "node scripts/demo-copy-flow.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

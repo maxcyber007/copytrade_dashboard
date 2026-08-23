@@ -15,7 +15,7 @@ or
 `message` is always member-safe. Technical detail and stack traces stay in the logs
 and in `SystemError`, visible to admins only.
 
-## Implemented (Phase 1–2)
+## Implemented
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
@@ -50,7 +50,7 @@ Review takes `{ decision: "APPROVE" | "REJECT" | "SUSPEND", publicReason?, revie
 
 **Admin** — `GET /api/admin/dashboard`, `/members`, `/accounts`, `/copy-trades`, `/errors`
 
-## Master trade event contract (Phase 7)
+## Master trade event contract
 
 Headers (the key identifies exactly one strategy — a provider cannot publish into
 another provider's strategy):

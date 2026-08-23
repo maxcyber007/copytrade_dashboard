@@ -10,11 +10,12 @@ A member's platform is a property of their account, not a separate product: an M
 master can be copied to MT4 members and vice versa, with symbol mapping and lot
 rounding bridging the brokers.
 
-> **Status: Phases 1–6 complete** — setup, database, authentication, member and
-> admin dashboards, strategy management, the signal provider marketplace, and the
-> mock trading provider that makes all of it work end to end without a live
-> account. Next: the master trade event API and the copy engine (Phases 7–9).
-> See [Roadmap](#roadmap).
+> **Status: Phases 1–9 complete** — setup, database, authentication, member and
+> admin dashboards, strategy management, the provider marketplace, the mock
+> trading provider, and the full copy path: signed master trade events, the queue
+> and worker that fan them out, and the risk engine that decides what reaches each
+> member. `npm run demo` drives a master trade to member accounts end to end.
+> Next: real-time dashboard updates and the MetaApi provider. See [Roadmap](#roadmap).
 
 ## Architecture
 
@@ -106,8 +107,9 @@ Schema and index rationale: [docs/database.md](docs/database.md)
 With the app running (`npm run dev` or `docker compose up -d`):
 
 ```bash
-npm run smoke                                   # against http://localhost:3000
+npm run smoke                                   # 65 checks against http://localhost:3000
 node scripts/smoke-test.mjs https://your-host   # or any deployment
+npm run demo                                    # drive a master trade to member accounts
 ```
 
 The script exercises health, registration, validation, session handling, login,
@@ -164,6 +166,7 @@ Implemented today:
 | POST | `/api/copy/subscribe`, `/start`, `/pause`, `/stop` | Subscription and copy control |
 | PUT/DELETE | `/api/copy/:id/settings`, `/api/copy/:id` | Change lot and risk settings / unsubscribe |
 | GET | `/api/trades` | Copy history |
+| POST | `/api/master/events` | Master EA trade events (API key + HMAC + timestamp + eventId) |
 | GET/POST | `/api/provider/strategies` | A provider's own strategies |
 | POST/DELETE | `/api/provider/strategies/:id/keys`, `/api/provider/keys/:id` | Issue / revoke master EA credentials |
 | GET/POST/PUT/DELETE | `/api/admin/strategies[/:id][/status]` | Admin strategy management |
@@ -207,8 +210,19 @@ See [docs/trading-provider.md](docs/trading-provider.md).
 ## Copy engine
 
 Master EA → signed `POST /api/master/events` → duplicate check → queue → copy worker
-→ risk engine → provider → recorded result. Retries use exponential backoff and
-always re-check live position state first, so a retry can never double-open an order.
+→ symbol mapping → lot calculation → risk engine → provider → recorded result.
+
+Three properties carry the safety:
+
+- **Idempotency is structural.** The `CopyTrade` row is created before any order is
+  sent, inside the unique `(eventId, accountId)` constraint, so a replayed event,
+  a retry or a second worker cannot open a duplicate order.
+- **A retry re-checks reality.** Before opening, the worker reads live positions and
+  looks for one carrying this copy's id; if the previous attempt did land, it is
+  recorded as a success rather than sent again.
+- **HTTP 200 is not a fill.** A copy counts as `SUCCESS` only when the provider
+  returns an execution with a broker ticket.
+
 See [docs/copy-engine.md](docs/copy-engine.md).
 
 ## Security
@@ -247,9 +261,9 @@ integration test of the full master-trade → member-copy path.
 | 4 | Admin dashboard, members, accounts, errors | done |
 | 5 | Strategy management (admin + provider) | done |
 | 6 | Mock MT4/MT5 provider | done |
-| 7 | Master trade event API (HMAC) | planned |
-| 8 | Copy engine + worker | planned |
-| 9 | Risk engine | planned |
+| 7 | Master trade event API (HMAC) | done |
+| 8 | Copy engine + worker | done |
+| 9 | Risk engine | done |
 | 10 | Real-time dashboard (SSE) | planned |
 | 11 | MetaApi provider (MT4 + MT5) | planned |
 | 12 | Subscription | planned |
