@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "./logo";
+import { BRAND } from "@/lib/brand";
 
 const COLUMNS = [
   {
@@ -37,7 +38,7 @@ export function SiteFooter() {
             <Link href="/" className="flex items-center gap-2.5">
               <Logo />
               <span className="text-[15px] font-semibold tracking-tight">
-                CopyTrade <span className="text-gold">Cloud</span>
+                {BRAND.wordmark.lead} <span className="text-gold">{BRAND.wordmark.accent}</span> {BRAND.wordmark.trail}
               </span>
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted">
@@ -66,7 +67,7 @@ export function SiteFooter() {
           className="mt-12 flex flex-col gap-4 border-t pt-6 text-xs text-muted sm:flex-row sm:items-center sm:justify-between"
           style={{ borderColor: "var(--panel-border)" }}
         >
-          <p>© {new Date().getFullYear()} CopyTrade Cloud. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {BRAND.name}. All rights reserved.</p>
           <p className="max-w-xl leading-relaxed">
             Trading leveraged products carries a high level of risk and can result in the loss of
             your capital. Past performance does not guarantee future results.

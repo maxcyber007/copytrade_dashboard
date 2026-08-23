@@ -4,6 +4,7 @@ import { getEnv } from "@/lib/env";
 import { logErrorEvent } from "@/lib/logger";
 import { getEmailProvider } from "@/providers/email/factory";
 import { publishUserEvent } from "@/lib/events";
+import { BRAND } from "@/lib/brand";
 
 export type NotifyInput = {
   userId: string;
@@ -54,7 +55,7 @@ export async function notify(input: NotifyInput): Promise<void> {
     await getEmailProvider().send({
       to: user.email,
       subject: input.title,
-      text: `${input.message}\n\n${input.link ? `${getEnv().APP_URL}${input.link}\n\n` : ""}— CopyTrade Cloud`,
+      text: `${input.message}\n\n${input.link ? `${getEnv().APP_URL}${input.link}\n\n` : ""}— ${BRAND.name}`,
     });
   } catch (error) {
     logErrorEvent({

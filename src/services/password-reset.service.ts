@@ -7,6 +7,7 @@ import { logErrorEvent, logEvent } from "@/lib/logger";
 import { getEmailProvider } from "@/providers/email/factory";
 import { AuditAction, recordAudit } from "./audit.service";
 import type { RequestMeta } from "./auth.service";
+import { BRAND } from "@/lib/brand";
 
 /**
  * Starts a password reset.
@@ -51,7 +52,7 @@ export async function requestPasswordReset(email: string, meta: RequestMeta): Pr
   try {
     await getEmailProvider().send({
       to: user.email,
-      subject: "Reset your CopyTrade Cloud password",
+      subject: `Reset your ${BRAND.name} password`,
       text: [
         "Someone asked to reset the password for this account.",
         "",
@@ -61,7 +62,7 @@ export async function requestPasswordReset(email: string, meta: RequestMeta): Pr
         "If it wasn't you, ignore this message — your password has not changed,",
         "and the link can only be used once.",
         "",
-        "— CopyTrade Cloud",
+        `— ${BRAND.name}`,
       ].join("\n"),
     });
   } catch (error) {

@@ -6,6 +6,7 @@ import { Menu, X } from "lucide-react";
 import { Logo } from "./logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/brand";
 
 const LINKS = [
   { href: "#how", label: "How it works" },
@@ -42,7 +43,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
         <Link href="/" className="flex items-center gap-2.5">
           <Logo />
           <span className="text-[15px] font-semibold tracking-tight">
-            CopyTrade <span className="text-gold">Cloud</span>
+            {BRAND.wordmark.lead} <span className="text-gold">{BRAND.wordmark.accent}</span> {BRAND.wordmark.trail}
           </span>
         </Link>
 

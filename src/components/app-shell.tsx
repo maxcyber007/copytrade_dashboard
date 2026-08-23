@@ -3,6 +3,7 @@ import type { SessionUser } from "@/lib/auth/session";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LogoutButton } from "@/components/logout-button";
 import { Logo } from "@/components/landing/logo";
+import { BRAND } from "@/lib/brand";
 
 const MEMBER_NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -45,7 +46,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           <Link href="/" className="flex items-center gap-2.5">
             <Logo className="h-7 w-7" />
             <span className="text-[15px] font-semibold tracking-tight">
-              CopyTrade <span className="text-gold">Cloud</span>
+              {BRAND.wordmark.lead} <span className="text-gold">{BRAND.wordmark.accent}</span> {BRAND.wordmark.trail}
             </span>
           </Link>
         </div>

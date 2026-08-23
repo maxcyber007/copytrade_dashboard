@@ -1,4 +1,4 @@
-# CopyTrade Cloud — MT4 / MT5 Cloud Copy Trading Platform
+# TrendX Synex Platform — MT4 / MT5 Cloud Copy Trading
 
 Cloud copy trading for MetaTrader, with a marketplace on both sides. Members
 connect their **MetaTrader 4 or MetaTrader 5** accounts through the web dashboard
