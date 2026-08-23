@@ -23,9 +23,28 @@ export type ProviderStrategyView = {
   events: number;
   totalReturnPct: number;
   keys: ApiKeyView[];
+  /** The account the platform publishes from, when there is one. */
+  masterAccountId: string | null;
+  watchStartedAt: string | null;
+  watchLastPollAt: string | null;
 };
 
-export function ProviderStrategyManager({ strategies }: { strategies: ProviderStrategyView[] }) {
+/** One of the provider's own trading accounts, offered as a publishing source. */
+export type MasterAccountOption = {
+  id: string;
+  label: string;
+  platform: string;
+  login: string;
+  connectionStatus: string;
+};
+
+export function ProviderStrategyManager({
+  strategies,
+  accounts,
+}: {
+  strategies: ProviderStrategyView[];
+  accounts: MasterAccountOption[];
+}) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(strategies.length === 0);
   const [saving, setSaving] = useState(false);
@@ -88,6 +107,27 @@ export function ProviderStrategyManager({ strategies }: { strategies: ProviderSt
         body: JSON.stringify({ label: "Master EA" }),
       });
       if (json.data?.key) setIssuedSecret({ keyId: json.data.key.keyId, secret: json.data.key.secret });
+      router.refresh();
+    } catch (error) {
+      setToast({ message: (error as { message?: string }).message ?? "Request failed", tone: "error" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function setMasterAccount(strategyId: string, accountId: string | null) {
+    setBusy(`${strategyId}:master`);
+    try {
+      await call(`/api/provider/strategies/${strategyId}/master-account`, {
+        method: "PUT",
+        body: JSON.stringify({ accountId }),
+      });
+      setToast({
+        message: accountId
+          ? "Publishing from this account. Trades opened from now on are copied; anything already open is not."
+          : "Stopped publishing from that account",
+        tone: "success",
+      });
       router.refresh();
     } catch (error) {
       setToast({ message: (error as { message?: string }).message ?? "Request failed", tone: "error" });
@@ -207,6 +247,16 @@ export function ProviderStrategyManager({ strategies }: { strategies: ProviderSt
             </div>
 
             <div className="mt-5">
+              <p className="text-xs uppercase tracking-wide text-muted">Publishing source</p>
+              <MasterAccountPicker
+                strategy={strategy}
+                accounts={accounts}
+                busy={busy === `${strategy.id}:master`}
+                onChange={(accountId) => setMasterAccount(strategy.id, accountId)}
+              />
+            </div>
+
+            <div className="mt-5">
               <p className="text-xs uppercase tracking-wide text-muted">Master EA keys</p>
               {strategy.keys.length === 0 ? (
                 <p className="mt-2 text-sm text-muted">
@@ -250,6 +300,72 @@ export function ProviderStrategyManager({ strategies }: { strategies: ProviderSt
       )}
 
       {toast && <Toast message={toast.message} tone={toast.tone} onDismiss={() => setToast(null)} />}
+    </div>
+  );
+}
+
+/**
+ * Chooses which trading account a strategy publishes from.
+ *
+ * Only the owner's accounts on the strategy's own platform are offered: an MT4
+ * account cannot publish an MT5 strategy's trades, and finding that out from a
+ * rejected request is worse than not being offered the choice.
+ */
+function MasterAccountPicker({
+  strategy,
+  accounts,
+  busy,
+  onChange,
+}: {
+  strategy: ProviderStrategyView;
+  accounts: MasterAccountOption[];
+  busy: boolean;
+  onChange: (accountId: string | null) => void;
+}) {
+  const usable = accounts.filter((account) => account.platform === strategy.masterPlatform);
+  const linked = usable.find((account) => account.id === strategy.masterAccountId);
+
+  if (usable.length === 0) {
+    return (
+      <p className="mt-2 text-sm text-muted">
+        No connected {strategy.masterPlatform} account to publish from. Connect one under Trading Accounts,
+        or publish with a master EA using a key below.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label="Publish from"
+          disabled={busy}
+          value={strategy.masterAccountId ?? ""}
+          onChange={(event) => onChange(event.target.value === "" ? null : event.target.value)}
+          className="panel h-10 rounded-lg px-3 text-sm outline-none focus:border-brand-500"
+        >
+          <option value="">A master EA (using a key below)</option>
+          {usable.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.label} · {account.login}
+              {account.connectionStatus === "CONNECTED" ? "" : ` (${account.connectionStatus.toLowerCase()})`}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {linked && (
+        <p className="text-xs text-muted">
+          {linked.connectionStatus === "CONNECTED"
+            ? strategy.watchStartedAt
+              ? `Watching since ${new Date(strategy.watchStartedAt).toLocaleString()}` +
+                (strategy.watchLastPollAt
+                  ? ` · last checked ${new Date(strategy.watchLastPollAt).toLocaleTimeString()}`
+                  : "")
+              : "Watching starts on the next check. Positions already open then are recorded but not copied."
+            : "This account is not connected, so nothing is being published from it."}
+        </p>
+      )}
     </div>
   );
 }

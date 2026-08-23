@@ -416,8 +416,16 @@ model Strategy {
   providerId String?
   provider   ProviderProfile?  @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
+  /// When set, the platform watches this trading account and publishes the
+  /// strategy's trades itself — no master EA and no VPS. When null, trades
+  /// arrive from an EA through the signed trade event API.
   masterAccountId   String?
   masterAccount     TradingAccount? @relation("StrategyMasterAccount", fields: [masterAccountId], references: [id], onDelete: SetNull)
+  /// When watching began. Positions already open at that moment are recorded as
+  /// a baseline and never copied: a follower cannot enter a trade that started
+  /// before they were following it, at a price that has already moved.
+  watchStartedAt    DateTime?
+  watchLastPollAt   DateTime?
   // Human readable master identifier reported by the EA (e.g. MASTER-001)
   masterAccountCode String?
   /// Platform of the master account. Members on the other platform can still

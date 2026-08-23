@@ -219,7 +219,9 @@ describe("the sweep", () => {
       },
     });
 
-    await reconcileAllAccounts();
+    // Scoped to this test's own accounts: an unscoped sweep would reach into
+    // whatever else the suite has in the database and close its positions.
+    await reconcileAllAccounts({ accountIds: [stranded.id, ids.account] });
 
     const refreshed = await prisma.tradingAccount.findUniqueOrThrow({ where: { id: stranded.id } });
 

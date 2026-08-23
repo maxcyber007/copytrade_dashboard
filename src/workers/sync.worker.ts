@@ -2,6 +2,7 @@ import { Worker, type Job } from "bullmq";
 import { redisConnectionOptions } from "@/lib/redis";
 import { logErrorEvent, logEvent } from "@/lib/logger";
 import { reconcileAllAccounts, recomputeAllStats } from "@/services/reconcile.service";
+import { pollAllMasterAccounts } from "@/services/master-watch.service";
 import { MaintenanceJob, QueueName, type MaintenanceJobData } from "./queues";
 
 /**
@@ -20,6 +21,16 @@ export function startSyncWorker(): Worker<MaintenanceJobData> {
       if (job.name === MaintenanceJob.ACCOUNT_SYNC) {
         const result = await reconcileAllAccounts();
         logEvent({ event: "ACCOUNT_SYNC_COMPLETED", latency: Date.now() - startedAt, ...result });
+        return result;
+      }
+
+      if (job.name === MaintenanceJob.MASTER_WATCH) {
+        const result = await pollAllMasterAccounts();
+        // Logged only when there was something to do: at this cadence a line
+        // per poll would bury everything else in the log.
+        if (result.strategies > 0) {
+          logEvent({ event: "MASTER_WATCH_COMPLETED", latency: Date.now() - startedAt, ...result });
+        }
         return result;
       }
 

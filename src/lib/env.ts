@@ -45,6 +45,12 @@ const schema = z.object({
   /** Background job cadence. */
   SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(15).default(60),
   STATS_INTERVAL_SECONDS: z.coerce.number().int().min(60).default(300),
+  /**
+   * How often a watched master account is polled. This is the delay a follower
+   * sees before a master's trade reaches them, so it is deliberately short —
+   * and bounded below, because each poll is a broker call per strategy.
+   */
+  MASTER_WATCH_SECONDS: z.coerce.number().int().min(5).max(300).default(15),
 
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   RATE_LIMIT_ENABLED: z

@@ -88,3 +88,48 @@ details and the owning user id are never in a public response.
 `PROVIDER_APPLIED`, `PROVIDER_APPROVED`, `PROVIDER_REJECTED`, `PROVIDER_SUSPENDED`,
 `PROVIDER_KEY_ISSUED` and `PROVIDER_KEY_REVOKED` are written to `AuditLog` with the
 actor, the applicant and the decision.
+
+## Publishing without an EA
+
+A strategy can publish straight from a trading account the platform is already
+connected to. The provider picks one of their own accounts as the strategy's
+**publishing source**, and the worker polls it every `MASTER_WATCH_SECONDS`
+(default 15), turning what changed into exactly the trade events a master EA
+would have sent. Everything downstream is unchanged — same `ingestMasterEvent`,
+same idempotency, same copy engine — so there is one copy path, not two.
+
+| What the poll sees | What it publishes |
+| --- | --- |
+| A ticket that was not there before | `OPEN` |
+| Stop loss or take profit changed | `MODIFY` |
+| Volume decreased | `PARTIAL_CLOSE`, carrying the volume that was closed |
+| Ticket gone | `CLOSE`, with the broker's own close price and realised profit |
+| Volume increased | nothing — logged as unsupported (see below) |
+
+Three properties decide whether this is safe to run against real money:
+
+- **Event ids are derived, not random.** Each id is a hash of the strategy, the
+  ticket, the kind of change and what makes it distinct, so a poll that runs
+  twice — a retry, a restart mid-sweep, two workers — produces the same id, and
+  the second is rejected by the same unique index that protects the EA path. A
+  copy platform that double-sends an `OPEN` doubles every follower's position.
+- **Positions already open when watching starts are never copied.** The first
+  poll after linking an account records them as a baseline and publishes
+  nothing. A follower cannot enter a trade that began before they were
+  following it, at a price that has already moved. Relinking an account starts
+  a fresh baseline for the same reason.
+- **An unreachable account publishes nothing.** Positions that cannot be seen
+  are unknown, not closed — publishing `CLOSE` for all of them because the
+  broker is briefly unreachable would close every follower's position for
+  nothing.
+
+Two limits worth stating plainly:
+
+- **Adding to an open position is not copied.** The copy engine has no event for
+  an increase, so it is counted and logged
+  (`MASTER_WATCH_VOLUME_INCREASE_UNSUPPORTED`) rather than silently ignored — a
+  follower whose position stops tracking the master's size is being misled.
+- **Latency is the poll interval.** A trade reaches followers up to
+  `MASTER_WATCH_SECONDS` after the master opens it. MetaApi also offers a
+  streaming connection, which would cut this to near real time; polling is the
+  simpler first implementation and the interval is the honest cost of it.

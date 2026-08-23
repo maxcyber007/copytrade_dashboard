@@ -158,8 +158,15 @@ export async function reconcileAccount(accountId: string): Promise<AccountReconc
   };
 }
 
-/** Reconciles every connected account. One failure never stops the others. */
-export async function reconcileAllAccounts(): Promise<{ accounts: number; failed: number; closed: number }> {
+/**
+ * Reconciles every connected account. One failure never stops the others.
+ *
+ * `accountIds` narrows the sweep to specific accounts — used to retry a known
+ * set, and by tests, which must not reach across into data they do not own.
+ */
+export async function reconcileAllAccounts(
+  scope: { accountIds?: string[] } = {},
+): Promise<{ accounts: number; failed: number; closed: number }> {
   // ERROR accounts are included so a broker outage or a restart heals itself
   // once the account is reachable again. An account that never connected is
   // not: there is no session to restore, and marking it ERROR here would
@@ -170,6 +177,7 @@ export async function reconcileAllAccounts(): Promise<{ accounts: number; failed
       connectionStatus: { in: ["CONNECTED", "ERROR"] },
       providerAccountId: { not: null },
       encryptedPassword: { not: null },
+      ...(scope.accountIds ? { id: { in: scope.accountIds } } : {}),
     },
     select: { id: true },
   });

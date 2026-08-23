@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import { getOwnProviderProfile } from "@/services/provider.service";
 import { listProviderStrategies } from "@/services/strategy.service";
+import { listAccounts } from "@/services/account.service";
 import { ProviderStrategyManager } from "@/components/strategies/provider-strategy-manager";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,11 @@ export default async function ProviderStrategiesPage() {
     );
   }
 
-  const strategies = await listProviderStrategies(user.id);
+  const [strategies, accounts] = await Promise.all([
+    listProviderStrategies(user.id),
+    // The provider's own accounts, offered as publishing sources.
+    listAccounts(user.id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -43,7 +48,8 @@ export default async function ProviderStrategiesPage() {
         <h1 className="text-2xl font-semibold tracking-tight">My strategies</h1>
         <p className="mt-1 text-sm text-muted">
           Publishing as <span className="font-medium">{profile.displayName}</span>. Each strategy has
-          its own master EA key — a key for one strategy can never publish into another.
+          its own master EA key — a key for one strategy can never publish into another. Or publish
+          straight from a connected trading account, with no EA and no VPS at all.
         </p>
       </div>
 
@@ -55,6 +61,9 @@ export default async function ProviderStrategiesPage() {
           description: strategy.description,
           status: strategy.status,
           masterPlatform: strategy.masterPlatform,
+          masterAccountId: strategy.masterAccountId,
+          watchStartedAt: strategy.watchStartedAt ? strategy.watchStartedAt.toISOString() : null,
+          watchLastPollAt: strategy.watchLastPollAt ? strategy.watchLastPollAt.toISOString() : null,
           subscribers: strategy._count.subscriptions,
           events: strategy._count.tradeEvents,
           totalReturnPct: toNumber(strategy.totalReturnPct),
@@ -65,6 +74,13 @@ export default async function ProviderStrategiesPage() {
             lastUsedAt: key.lastUsedAt ? key.lastUsedAt.toISOString() : null,
             createdAt: key.createdAt.toISOString(),
           })),
+        }))}
+        accounts={accounts.map((account) => ({
+          id: account.id,
+          label: account.label,
+          platform: account.platform,
+          login: account.login,
+          connectionStatus: account.connectionStatus,
         }))}
       />
     </div>

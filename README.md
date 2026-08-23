@@ -23,8 +23,11 @@ rounding bridging the brokers.
 > cannot be done from this repository — see
 > [docs/trading-provider.md](docs/trading-provider.md).
 >
-> A Master EA (MQL4/MQL5) that publishes the trade events, a real payment
-> gateway and 2FA are still outstanding before real money is involved.
+> A strategy can publish straight from a connected trading account — the
+> platform watches it and generates the trade events itself, so no master EA
+> and no VPS are needed. A Master EA (MQL4/MQL5) remains an alternative for
+> providers who would rather not hand over master credentials, and a real
+> payment gateway and 2FA are still outstanding before real money is involved.
 
 ## Architecture
 

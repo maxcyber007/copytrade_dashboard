@@ -14,6 +14,7 @@ export type MaintenanceJobData = Record<string, never>;
 export const MaintenanceJob = {
   ACCOUNT_SYNC: "account-sync",
   STRATEGY_STATS: "strategy-stats",
+  MASTER_WATCH: "master-watch",
 } as const;
 
 /**
@@ -54,7 +55,11 @@ export function getMaintenanceQueue(): Queue<MaintenanceJobData> {
  * or running several of them — re-uses the one schedule instead of stacking
  * another copy of it.
  */
-export async function scheduleMaintenanceJobs(intervals: { syncSeconds: number; statsSeconds: number }) {
+export async function scheduleMaintenanceJobs(intervals: {
+  syncSeconds: number;
+  statsSeconds: number;
+  masterWatchSeconds: number;
+}) {
   const queue = getMaintenanceQueue();
 
   await queue.upsertJobScheduler(
@@ -62,6 +67,17 @@ export async function scheduleMaintenanceJobs(intervals: { syncSeconds: number; 
     { every: intervals.syncSeconds * 1000 },
     {
       name: MaintenanceJob.ACCOUNT_SYNC,
+      opts: { removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } },
+    },
+  );
+
+  // Runs far more often than the others: this one decides how long a follower
+  // waits before a master's trade reaches them.
+  await queue.upsertJobScheduler(
+    MaintenanceJob.MASTER_WATCH,
+    { every: intervals.masterWatchSeconds * 1000 },
+    {
+      name: MaintenanceJob.MASTER_WATCH,
       opts: { removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } },
     },
   );

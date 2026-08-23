@@ -19,6 +19,7 @@ async function main() {
   await scheduleMaintenanceJobs({
     syncSeconds: env.SYNC_INTERVAL_SECONDS,
     statsSeconds: env.STATS_INTERVAL_SECONDS,
+    masterWatchSeconds: env.MASTER_WATCH_SECONDS,
   });
 
   logger.info({
@@ -27,6 +28,7 @@ async function main() {
     queues: ["copy-trade", "position-sync"],
     syncSeconds: env.SYNC_INTERVAL_SECONDS,
     statsSeconds: env.STATS_INTERVAL_SECONDS,
+    masterWatchSeconds: env.MASTER_WATCH_SECONDS,
   });
 
   const shutdown = async (signal: string) => {

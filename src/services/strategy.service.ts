@@ -97,6 +97,67 @@ export async function updateStrategy(
 }
 
 /**
+ * Points a strategy at one of the owner's own trading accounts, so the platform
+ * publishes its trades instead of a master EA.
+ *
+ * Two guards, both about who is publishing what:
+ *
+ *   - the account must belong to the person doing this, or a provider could
+ *     publish somebody else's trading as their own strategy;
+ *   - linking resets `watchStartedAt`, so the next poll records what is open as
+ *     a baseline rather than replaying trades that began before followers were
+ *     following them.
+ */
+export async function setStrategyMasterAccount(
+  id: string,
+  accountId: string | null,
+  actor: { userId: string; isAdmin: boolean },
+  meta: RequestMeta,
+) {
+  const strategy = await requireStrategyAccess(id, actor);
+
+  if (accountId) {
+    const account = await prisma.tradingAccount.findFirst({
+      where: { id: accountId, userId: actor.userId },
+      select: { id: true, platform: true, connectionStatus: true, login: true },
+    });
+
+    if (!account) {
+      throw new AppError(ErrorCode.NOT_FOUND, "That trading account is not one of yours");
+    }
+
+    if (account.platform !== strategy.masterPlatform) {
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        `This strategy publishes ${strategy.masterPlatform} trades, but that account is ${account.platform}`,
+      );
+    }
+  }
+
+  const updated = await prisma.strategy.update({
+    where: { id },
+    data: {
+      masterAccountId: accountId,
+      // Cleared either way: linking starts a fresh baseline, unlinking leaves
+      // nothing to have a baseline for.
+      watchStartedAt: null,
+      watchLastPollAt: null,
+    },
+  });
+
+  await recordAudit({
+    action: AuditAction.STRATEGY_UPDATED,
+    userId: actor.userId,
+    resourceType: "Strategy",
+    resourceId: id,
+    metadata: { action: accountId ? "MASTER_ACCOUNT_LINKED" : "MASTER_ACCOUNT_UNLINKED", accountId },
+    ...meta,
+  });
+
+  return updated;
+}
+
+/**
  * Changing status is the control that stops trades reaching members.
  * Pausing offers the operator a choice: keep member positions, or close them.
  */
