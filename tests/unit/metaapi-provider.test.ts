@@ -42,6 +42,8 @@ type FakeState = {
   /** Stands in for a token without account provisioning access. */
   refuseProvisioning?: Error & { status?: number };
   existingAccounts: unknown[];
+  deals: Record<string, unknown[]>;
+  dealsError?: Error;
   clientOptions?: Record<string, unknown>;
   positions: MetaApiPosition[];
   /** Ticket the fake reports for a partial close, standing in for MT4. */
@@ -56,6 +58,7 @@ function makeSdk(overrides: Partial<FakeState> = {}) {
     closed: false,
     createdAccounts: [],
     existingAccounts: [],
+    deals: {},
     trades: [],
     positions: [],
     ...overrides,
@@ -127,6 +130,10 @@ function makeSdk(overrides: Partial<FakeState> = {}) {
     async getSymbolSpecification(symbol: string) {
       if (symbol !== "XAUUSD") throw new Error("symbol not found");
       return spec;
+    },
+    async getDealsByPosition(positionId: string) {
+      if (state.dealsError) throw state.dealsError;
+      return { deals: (state.deals[positionId] ?? []) as never[], synchronizing: false };
     },
     async createMarketBuyOrder(
       symbol: string,
@@ -611,5 +618,68 @@ describe("regions", () => {
     });
 
     expect(sdk.state.createdAccounts[0]).toMatchObject({ region: "london" });
+  });
+});
+
+describe("the result of a closed position", () => {
+  it("reports the closing fill price and profit net of commission and swap", async () => {
+    const sdk = makeSdk();
+    sdk.state.deals = {
+      "pos-1": [
+        { id: "d1", type: "DEAL_TYPE_BUY", entryType: "DEAL_ENTRY_IN", volume: 0.1, price: 3340, profit: 0, commission: -0.7, swap: 0 },
+        {
+          id: "d2",
+          type: "DEAL_TYPE_SELL",
+          entryType: "DEAL_ENTRY_OUT",
+          volume: 0.1,
+          price: 3352.5,
+          profit: 12.5,
+          commission: -0.7,
+          swap: -0.3,
+          time: "2026-08-23T12:00:00.000Z",
+          reason: "DEAL_REASON_TP",
+        },
+      ],
+    };
+
+    const result = await makeProvider(sdk).getClosedPosition("meta-account-1", "pos-1");
+
+    expect(result?.closePrice).toBe(3352.5);
+    // 12.5 gross, less 1.40 commission and 0.30 swap: reporting the gross
+    // figure would overstate every trade in the history.
+    expect(result?.profit).toBeCloseTo(10.8, 2);
+    expect(result?.reason).toBe("TAKE_PROFIT");
+    expect(result?.closedAt).toBeInstanceOf(Date);
+  });
+
+  it("says nothing rather than guessing when the broker reports no close", async () => {
+    const sdk = makeSdk();
+    // Only the opening deal: the position is still open.
+    sdk.state.deals = { "pos-2": [{ id: "d1", entryType: "DEAL_ENTRY_IN", price: 3340, profit: 0 }] };
+
+    expect(await makeProvider(sdk).getClosedPosition("meta-account-1", "pos-2")).toBeNull();
+    expect(await makeProvider(sdk).getClosedPosition("meta-account-1", "unknown")).toBeNull();
+  });
+
+  it("survives a history lookup that fails", async () => {
+    const sdk = makeSdk();
+    sdk.state.dealsError = Object.assign(new Error("history unavailable"), { status: 500 });
+
+    // A sweep or a copy must not break because a figure could not be fetched.
+    expect(await makeProvider(sdk).getClosedPosition("meta-account-1", "pos-1")).toBeNull();
+  });
+
+  it("distinguishes a stop loss from a close this platform sent", async () => {
+    const sdk = makeSdk();
+    sdk.state.deals = {
+      sl: [{ id: "d", entryType: "DEAL_ENTRY_OUT", price: 1, profit: -5, reason: "DEAL_REASON_SL" }],
+      expert: [{ id: "d", entryType: "DEAL_ENTRY_OUT", price: 1, profit: 5, reason: "DEAL_REASON_EXPERT" }],
+      manual: [{ id: "d", entryType: "DEAL_ENTRY_OUT", price: 1, profit: 5, reason: "DEAL_REASON_MOBILE" }],
+    };
+
+    const provider = makeProvider(sdk);
+    expect((await provider.getClosedPosition("meta-account-1", "sl"))?.reason).toBe("STOP_LOSS");
+    expect((await provider.getClosedPosition("meta-account-1", "expert"))?.reason).toBe("COPIED_CLOSE");
+    expect((await provider.getClosedPosition("meta-account-1", "manual"))?.reason).toBe("MANUAL");
   });
 });

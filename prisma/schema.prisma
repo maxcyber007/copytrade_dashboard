@@ -138,6 +138,15 @@ enum CopyTradeStatus {
   SKIPPED
 }
 
+/// Why a position stopped existing at the broker.
+enum CloseReason {
+  STOP_LOSS
+  TAKE_PROFIT
+  COPIED_CLOSE
+  MANUAL
+  OTHER
+}
+
 enum PositionStatus {
   OPEN
   CLOSED
@@ -755,6 +764,14 @@ model PositionMapping {
   sl            Decimal?       @db.Decimal(18, 5)
   tp            Decimal?       @db.Decimal(18, 5)
   status        PositionStatus @default(OPEN)
+
+  /// Filled from the broker's own deal records once the position ends. Null
+  /// where the broker has reported nothing: a history shows no figure rather
+  /// than one this platform inferred.
+  closePrice  Decimal?    @db.Decimal(18, 5)
+  /// Realised profit including commission and swap.
+  profit      Decimal?    @db.Decimal(18, 2)
+  closeReason CloseReason?
 
   openedAt DateTime  @default(now())
   closedAt DateTime?

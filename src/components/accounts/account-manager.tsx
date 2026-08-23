@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Toast } from "@/components/ui/toast";
 import { formatCurrency } from "@/lib/utils";
+import Link from "next/link";
 
 export type AccountView = {
   id: string;
@@ -168,6 +169,13 @@ export function AccountManager({ accounts }: { accounts: AccountView[] }) {
                 Connect
               </Button>
             )}
+            <Link
+              href={`/account/${account.id}/history`}
+              className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors hover:border-[var(--gold-line)] hover:text-gold"
+              style={{ borderColor: "var(--panel-border)" }}
+            >
+              Trade history
+            </Link>
             <Button
               size="sm"
               variant="danger"

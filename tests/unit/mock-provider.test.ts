@@ -176,3 +176,34 @@ describe("order rejections", () => {
     expect(result.errorCode).toBe("POSITION_NOT_FOUND");
   });
 });
+
+describe("closed position results", () => {
+  it("records the fill price and realised profit a close produced", async () => {
+    const login = uniqueLogin();
+    const { providerAccountId } = await connect("MT5", login);
+
+    const opened = await provider.openPosition(providerAccountId, {
+      symbol: "EURUSD",
+      orderType: "BUY",
+      volume: 0.1,
+      clientId: "close-result",
+    });
+
+    expect(await provider.getClosedPosition(providerAccountId, opened.ticket!)).toBeNull();
+
+    await provider.closePosition(providerAccountId, { ticket: opened.ticket! });
+    const result = await provider.getClosedPosition(providerAccountId, opened.ticket!);
+
+    // Without this the history can only say a position ended, not what it was
+    // worth — and that is the number a member is looking for.
+    expect(result?.ticket).toBe(opened.ticket);
+    expect(result?.closePrice).toBeGreaterThan(0);
+    expect(typeof result?.profit).toBe("number");
+    expect(result?.reason).toBe("COPIED_CLOSE");
+  });
+
+  it("has nothing to say about a ticket that never existed", async () => {
+    const { providerAccountId } = await connect("MT5", uniqueLogin());
+    expect(await provider.getClosedPosition(providerAccountId, "no-such-ticket")).toBeNull();
+  });
+});

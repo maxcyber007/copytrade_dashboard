@@ -1,6 +1,8 @@
 import type { ITradeProvider } from "./ITradeProvider";
 import type {
   AccountInfo,
+  ClosedPositionResult,
+  CloseReason,
   ClosePositionRequest,
   ConnectAccountInput,
   ConnectionResult,
@@ -15,6 +17,7 @@ import type {
 import type {
   MetaApiClient,
   MetaApiConstructor,
+  MetaApiDeal,
   MetaApiPosition,
   MetaApiRpcConnection,
   MetaApiTradeResponse,
@@ -459,6 +462,55 @@ export class MetaApiProvider implements ITradeProvider {
     };
   }
 
+  /**
+   * The realised result of a closed position, from the broker's own deals.
+   *
+   * Everything here comes from the deal records: the fill price of the closing
+   * deal, and profit summed with commission and swap — the number that actually
+   * moved the balance. A position still open, or one the broker has not
+   * reported deals for, returns null rather than an invented figure.
+   */
+  async getClosedPosition(providerAccountId: string, ticket: string): Promise<ClosedPositionResult | null> {
+    const connection = await this.connection(providerAccountId);
+
+    let deals: MetaApiDeal[];
+    try {
+      const response = await connection.getDealsByPosition(ticket);
+      deals = response?.deals ?? [];
+    } catch (error) {
+      // A history lookup failing must never break a sweep or a copy: the
+      // position is closed either way, and the figure is what is missing.
+      logErrorEvent({
+        event: "METAAPI_DEALS_LOOKUP_FAILED",
+        providerAccountId,
+        ticket,
+        reason: describeApiError(error),
+      });
+      return null;
+    }
+
+    const closing = deals.filter((deal) => deal.entryType !== "DEAL_ENTRY_IN");
+    if (closing.length === 0) return null;
+
+    // Commission and swap are part of what the member actually earned or lost;
+    // reporting gross profit would overstate every trade.
+    const profit = deals.reduce(
+      (total, deal) => total + (deal.profit ?? 0) + (deal.commission ?? 0) + (deal.swap ?? 0),
+      0,
+    );
+
+    const last = closing[closing.length - 1]!;
+
+    return {
+      ticket,
+      closePrice: last.price,
+      profit: Number(profit.toFixed(2)),
+      volume: closing.reduce((total, deal) => total + (deal.volume ?? 0), 0) || undefined,
+      closedAt: last.time ? new Date(last.time) : undefined,
+      reason: closeReasonOf(last.reason),
+    };
+  }
+
   // ------------------------------------------------------------------ trading
 
   async openPosition(providerAccountId: string, request: OpenPositionRequest): Promise<OrderResult> {
@@ -587,6 +639,28 @@ function positionModeOf(platform: Platform, marginMode: string | undefined): Pos
   if (platform === "MT4") return "HEDGING";
   const mode = (marginMode ?? "").toLowerCase();
   return mode.includes("netting") || mode === "exchange" ? "NETTING" : "HEDGING";
+}
+
+/** MT5 deal reasons, mapped to the platform's own vocabulary. */
+function closeReasonOf(reason: string | undefined): CloseReason | undefined {
+  switch (reason) {
+    case "DEAL_REASON_SL":
+      return "STOP_LOSS";
+    case "DEAL_REASON_TP":
+      return "TAKE_PROFIT";
+    // An order this platform sent arrives as an expert-advisor deal, because
+    // that is what MetaApi is from the terminal's point of view.
+    case "DEAL_REASON_EXPERT":
+      return "COPIED_CLOSE";
+    case "DEAL_REASON_CLIENT":
+    case "DEAL_REASON_MOBILE":
+    case "DEAL_REASON_WEB":
+      return "MANUAL";
+    case undefined:
+      return undefined;
+    default:
+      return "OTHER";
+  }
 }
 
 function toProviderPosition(position: MetaApiPosition): ProviderPosition {

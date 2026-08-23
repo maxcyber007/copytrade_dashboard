@@ -1,5 +1,6 @@
 import type {
   AccountInfo,
+  ClosedPositionResult,
   ClosePositionRequest,
   ConnectAccountInput,
   ConnectionResult,
@@ -32,6 +33,16 @@ export interface ITradeProvider {
   getAccountInfo(providerAccountId: string): Promise<AccountInfo>;
   getPositions(providerAccountId: string): Promise<ProviderPosition[]>;
   getSymbolSpec(providerAccountId: string, symbol: string): Promise<SymbolSpec | null>;
+
+  /**
+   * What the broker recorded for a position that is no longer open: the fill
+   * price and the realised profit.
+   *
+   * Returns null when the broker has nothing to say about the ticket yet, which
+   * is not an error — the history simply shows no figure rather than one this
+   * platform made up.
+   */
+  getClosedPosition(providerAccountId: string, ticket: string): Promise<ClosedPositionResult | null>;
 
   openPosition(providerAccountId: string, request: OpenPositionRequest): Promise<OrderResult>;
   modifyPosition(providerAccountId: string, request: ModifyPositionRequest): Promise<OrderResult>;

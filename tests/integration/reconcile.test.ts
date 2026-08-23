@@ -152,6 +152,13 @@ describe("account reconciliation", () => {
     expect(mapping?.status).toBe("CLOSED");
     expect(mapping?.closedAt).toBeTruthy();
 
+    // A position that ends at the broker is worth something, and only the
+    // broker knows what: the sweep reads the realised price and profit back
+    // rather than leaving the history to say a trade simply stopped existing.
+    expect(mapping?.closePrice).not.toBeNull();
+    expect(mapping?.profit).not.toBeNull();
+    expect(mapping?.closeReason).toBeTruthy();
+
     // The broker is the authority on the open count, not our running total.
     const refreshed = await prisma.tradingAccount.findUniqueOrThrow({ where: { id: ids.account } });
     expect(refreshed.openTrades).toBe(0);

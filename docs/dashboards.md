@@ -89,3 +89,20 @@ whom survives the member it describes.
 
 **Technical detail stops here.** Members see a mapped, non-technical message; the
 provider response, error code and stack stay on the admin surfaces and in the logs.
+
+## Per-account trade history
+
+`/account/[id]/history` lists the positions that existed on one trading account,
+which is a different question from the copy history: that records every event and
+every attempt, successful or not, while this records what actually existed at the
+broker and what became of it — entry, exit, realised profit and why it closed.
+
+Close price, profit and close reason are read back from the broker's own deal
+records (`ITradeProvider.getClosedPosition`) when a position ends, whether this
+platform closed it or a stop loss did. Nothing is inferred from prices: a
+position the broker has reported no result for shows a dash, and the account
+totals count only settled positions, saying how many are missing. Treating an
+unknown profit as zero would read as a flat trade rather than a missing one.
+
+Deals can lag a close by a moment, so the reconciliation sweep retries the
+lookup for recently closed positions that still have no figure.

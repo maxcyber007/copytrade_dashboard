@@ -80,6 +80,28 @@ export type OrderResult = {
   raw: unknown;
 };
 
+/** Why a position stopped existing at the broker. */
+export type CloseReason = "STOP_LOSS" | "TAKE_PROFIT" | "COPIED_CLOSE" | "MANUAL" | "OTHER";
+
+/**
+ * What the broker recorded once a position was closed.
+ *
+ * A trade event says what the master did; it says nothing about what the
+ * member's own position was worth when it ended. Only the broker knows the fill
+ * price and the realised profit, and a stop loss or take profit closes a
+ * position with no event at all — so this is read back from the broker rather
+ * than inferred from prices we happen to have.
+ */
+export type ClosedPositionResult = {
+  ticket: string;
+  closePrice?: number;
+  /** Realised profit, including commission and swap. */
+  profit: number;
+  volume?: number;
+  closedAt?: Date;
+  reason?: CloseReason;
+};
+
 export type SymbolSpec = {
   symbol: string;
   minLot: number;

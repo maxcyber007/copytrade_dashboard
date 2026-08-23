@@ -1,6 +1,8 @@
 import type { ITradeProvider } from "./ITradeProvider";
 import type {
   AccountInfo,
+  ClosedPositionResult,
+  CloseReason,
   ClosePositionRequest,
   ConnectAccountInput,
   ConnectionResult,
@@ -25,6 +27,9 @@ import { AppError, ErrorCode } from "@/lib/errors";
 
 type MockPosition = ProviderPosition & { closed: boolean };
 
+/** What the simulated broker remembers about a position that ended. */
+type MockClose = { ticket: string; closePrice: number; profit: number; volume: number; closedAt: Date; reason: CloseReason };
+
 type MockAccount = {
   providerAccountId: string;
   platform: Platform;
@@ -33,6 +38,7 @@ type MockAccount = {
   balance: number;
   netting: boolean;
   positions: Map<string, MockPosition>;
+  closes: Map<string, MockClose>;
   nextTicket: number;
 };
 
@@ -89,6 +95,7 @@ export class MockTradingProvider implements ITradeProvider {
       balance: existing?.balance ?? balance,
       netting,
       positions: existing?.positions ?? new Map(),
+      closes: existing?.closes ?? new Map(),
       nextTicket: existing?.nextTicket ?? 100_000 + Math.floor(seeded(input.login) * 800_000),
     });
 
@@ -230,8 +237,19 @@ export class MockTradingProvider implements ITradeProvider {
     }
 
     const closingVolume = request.volume ?? position.volume;
-    const profit = this.profitOf(position) * (closingVolume / position.volume);
+    const profit = round(this.profitOf(position) * (closingVolume / position.volume), 2);
     account.balance = round(account.balance + profit, 2);
+
+    // The broker is the only place a realised price and profit exist, so the
+    // simulation records them the way a real one would.
+    account.closes.set(position.ticket, {
+      ticket: position.ticket,
+      closePrice: position.currentPrice,
+      profit,
+      volume: closingVolume,
+      closedAt: new Date(),
+      reason: "COPIED_CLOSE",
+    });
 
     if (closingVolume >= position.volume) {
       position.closed = true;
@@ -263,6 +281,11 @@ export class MockTradingProvider implements ITradeProvider {
       volume: closingVolume,
       raw: { partialClose: true, platform: "MT5" },
     };
+  }
+
+  async getClosedPosition(providerAccountId: string, ticket: string): Promise<ClosedPositionResult | null> {
+    const account = this.require(providerAccountId);
+    return account.closes.get(ticket) ?? null;
   }
 
   // -- helpers ---------------------------------------------------------------

@@ -451,9 +451,23 @@ async function adjustForMember(
       },
     });
   } else if (event.eventType === "CLOSE" || event.eventType === "DELETE_PENDING") {
+    // The close order confirms the position ended, not what it was worth. The
+    // realised price and profit come from the broker's deal records, and stay
+    // null if it has none yet — the sweep fills them in on a later pass rather
+    // than the history showing a figure nobody reported.
+    const closed = await provider
+      .getClosedPosition(context.providerAccountId, mapping.memberTicket)
+      .catch(() => null);
+
     await prisma.positionMapping.update({
       where: { id: mapping.id },
-      data: { status: "CLOSED", closedAt: new Date() },
+      data: {
+        status: "CLOSED",
+        closedAt: closed?.closedAt ?? new Date(),
+        closePrice: closed?.closePrice ?? null,
+        profit: closed?.profit ?? null,
+        closeReason: closed?.reason ?? "COPIED_CLOSE",
+      },
     });
     await prisma.tradingAccount.update({
       where: { id: account.id },

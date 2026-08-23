@@ -83,6 +83,30 @@ export type MetaApiTradeOptions = {
   slippage?: number;
 };
 
+/**
+ * One deal from the account's history. A position's realised result is the sum
+ * of its deals: `DEAL_ENTRY_IN` opened it, `DEAL_ENTRY_OUT` closed all or part
+ * of it, and `reason` says what triggered the close.
+ */
+export type MetaApiDeal = {
+  id: string;
+  type: string;
+  /** `DEAL_ENTRY_IN` | `DEAL_ENTRY_OUT` | `DEAL_ENTRY_INOUT` | `DEAL_ENTRY_OUT_BY`. */
+  entryType: string;
+  symbol?: string;
+  time: Date | string;
+  volume?: number;
+  price?: number;
+  commission?: number;
+  swap?: number;
+  profit: number;
+  positionId?: string;
+  /** `DEAL_REASON_SL` | `DEAL_REASON_TP` | `DEAL_REASON_CLIENT` | `DEAL_REASON_EXPERT` | … */
+  reason?: string;
+};
+
+export type MetaApiDeals = { deals: MetaApiDeal[]; synchronizing: boolean };
+
 export interface MetaApiRpcConnection {
   connect(): Promise<void>;
   close(): Promise<void>;
@@ -92,6 +116,7 @@ export interface MetaApiRpcConnection {
   getPositions(): Promise<MetaApiPosition[]>;
   getPosition(positionId: string): Promise<MetaApiPosition>;
   getSymbolSpecification(symbol: string): Promise<MetaApiSymbolSpecification>;
+  getDealsByPosition(positionId: string): Promise<MetaApiDeals>;
 
   createMarketBuyOrder(
     symbol: string,

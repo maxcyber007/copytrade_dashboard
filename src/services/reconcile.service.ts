@@ -50,18 +50,71 @@ export async function reconcileAccount(accountId: string): Promise<AccountReconc
 
   const vanished = openMappings.filter((mapping) => !liveTickets.has(mapping.memberTicket));
 
-  if (vanished.length > 0) {
-    await prisma.positionMapping.updateMany({
-      where: { id: { in: vanished.map((mapping) => mapping.id) } },
-      data: { status: "CLOSED", closedAt: new Date() },
-    });
+  for (const mapping of vanished) {
+    // A stop loss, a take profit or the member closing by hand leaves no event
+    // and no result of its own. The broker's deal records are the only place
+    // the fill price and realised profit exist, so they are read back here —
+    // when the lookup returns nothing, the figures stay null and the history
+    // shows a dash rather than a number this platform invented.
+    const result = await provider
+      .getClosedPosition(providerAccountId, mapping.memberTicket)
+      .catch(() => null);
 
+    await prisma.positionMapping.update({
+      where: { id: mapping.id },
+      data: {
+        status: "CLOSED",
+        closedAt: result?.closedAt ?? new Date(),
+        closePrice: result?.closePrice ?? null,
+        profit: result?.profit ?? null,
+        closeReason: result?.reason ?? null,
+      },
+    });
+  }
+
+  if (vanished.length > 0) {
     logEvent({
       event: "POSITIONS_CLOSED_AT_BROKER",
       accountId,
       count: vanished.length,
       tickets: vanished.map((mapping) => mapping.memberTicket),
     });
+  }
+
+  // Deals can lag the close by a moment, so a lookup at close time can come
+  // back empty. Recently closed positions still missing a figure are retried
+  // here, bounded so a sweep never turns into a history crawl.
+  const missingResult = await prisma.positionMapping.findMany({
+    where: {
+      accountId,
+      status: "CLOSED",
+      profit: null,
+      closedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    select: { id: true, memberTicket: true },
+    orderBy: { closedAt: "desc" },
+    take: 20,
+  });
+
+  let backfilled = 0;
+
+  for (const mapping of missingResult) {
+    const result = await provider.getClosedPosition(providerAccountId, mapping.memberTicket).catch(() => null);
+    if (!result) continue;
+
+    await prisma.positionMapping.update({
+      where: { id: mapping.id },
+      data: {
+        closePrice: result.closePrice ?? null,
+        profit: result.profit,
+        closeReason: result.reason ?? undefined,
+      },
+    });
+    backfilled += 1;
+  }
+
+  if (backfilled > 0) {
+    logEvent({ event: "POSITION_RESULTS_BACKFILLED", accountId, count: backfilled });
   }
 
   const peakEquity = Math.max(toNumber(account.peakEquity), info.equity);
