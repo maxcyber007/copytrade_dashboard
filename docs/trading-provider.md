@@ -124,6 +124,13 @@ Four details decide whether a copy is correct, and each is easy to get wrong:
 | `METAAPI_ACCOUNT_TYPE` | `cloud-g2` | MetaApi's own default — "faster and cheaper" than `cloud-g1` |
 | `METAAPI_RELIABILITY` | `regular` | `high` is a **paid** option billed at two resource slots; asking for it on a subscription that does not include it fails account creation |
 
+`createAccount` is only allowed for a token with account provisioning access. A
+narrower token answers `HTTP 403`, and the provider says so explicitly instead of
+reporting a connection failure — the two are fixed in completely different
+places. Either widen the token, or create the account once in the MetaApi
+dashboard with the same login and server: the provider looks for an existing
+account first and reuses it, which also avoids paying for the same login twice.
+
 A failed MetaApi call is reported with its HTTP status and, for a validation
 failure, the `details` object naming the field it rejected — the `message` alone
 is often just a request id. Anything credential-shaped in those details is

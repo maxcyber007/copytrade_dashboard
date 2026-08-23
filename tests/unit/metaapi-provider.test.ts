@@ -39,6 +39,9 @@ type FakeState = {
   createdAccounts: unknown[];
   trades: Array<{ method: string; args: unknown[] }>;
   reject?: FakeTradeError;
+  /** Stands in for a token without account provisioning access. */
+  refuseProvisioning?: Error & { status?: number };
+  existingAccounts: unknown[];
   positions: MetaApiPosition[];
   /** Ticket the fake reports for a partial close, standing in for MT4. */
   partialCloseRemainder?: string;
@@ -51,6 +54,7 @@ function makeSdk(overrides: Partial<FakeState> = {}) {
     synchronized: false,
     closed: false,
     createdAccounts: [],
+    existingAccounts: [],
     trades: [],
     positions: [],
     ...overrides,
@@ -180,9 +184,11 @@ function makeSdk(overrides: Partial<FakeState> = {}) {
         return account;
       },
       async getAccountsWithInfiniteScrollPagination() {
-        return [] as never[];
+        if (state.refuseProvisioning) throw state.refuseProvisioning;
+        return state.existingAccounts as never[];
       },
       async createAccount(dto: unknown) {
+        if (state.refuseProvisioning) throw state.refuseProvisioning;
         state.createdAccounts.push(dto);
         return account;
       },
@@ -498,5 +504,47 @@ describe("error reporting", () => {
   it("reports something usable for an error carrying nothing but a name", () => {
     expect(describeApiError(new TypeError(""))).toBe("TypeError");
     expect(describeApiError("not an error")).toBe("unknown error");
+  });
+});
+
+describe("a token without provisioning access", () => {
+  it("says the token is the problem rather than the connection", async () => {
+    const sdk = makeSdk({
+      refuseProvisioning: Object.assign(new Error("(1751924b61c84c81a4244867114893d8)"), { status: 403 }),
+    });
+
+    const attempt = makeProvider(sdk).connectAccount({
+      accountId: "acc-1",
+      platform: "MT5",
+      login: "123456",
+      server: "Fake-Server",
+      broker: "Fake Broker",
+      password: "brokerpassword",
+    });
+
+    // MetaApi accepted the request and refused the permission. Reporting this
+    // as a connection failure sends whoever reads it looking at the broker.
+    await expect(attempt).rejects.toThrow(/METAAPI_TOKEN needs account provisioning access/);
+    await expect(attempt).rejects.toThrow(/HTTP 403/);
+  });
+
+  it("reuses an account that already exists rather than creating one", async () => {
+    const sdk = makeSdk();
+    // The same account, already provisioned by hand in the MetaApi dashboard.
+    sdk.state.existingAccounts = [sdk.account];
+
+    const result = await makeProvider(sdk).connectAccount({
+      accountId: "acc-1",
+      platform: "MT5",
+      login: "123456",
+      server: "Fake-Server",
+      broker: "Fake Broker",
+      password: "brokerpassword",
+    });
+
+    expect(result.providerAccountId).toBe("meta-account-1");
+    // Creating a second account for one login is billed twice and leaves two
+    // terminals fighting over the same broker session.
+    expect(sdk.state.createdAccounts).toHaveLength(0);
   });
 });

@@ -284,7 +284,13 @@ export class MetaApiProvider implements ITradeProvider {
       // terminals fighting over the same broker session.
       const existing = await api
         .getAccountsWithInfiniteScrollPagination({ query: input.login, limit: 100 })
-        .catch(() => [] as MetaApiTradingAccount[]);
+        .catch((error: unknown) => {
+          // Not fatal on its own — creating the account may still work — but a
+          // silent empty list here turns a token permission problem into a
+          // confusing failure one call later.
+          logErrorEvent({ event: "METAAPI_ACCOUNT_LOOKUP_FAILED", reason: describeApiError(error) });
+          return [] as MetaApiTradingAccount[];
+        });
 
       const match = existing.find(
         (candidate) => String(candidate.login) === input.login && candidate.server === input.server,
@@ -310,6 +316,20 @@ export class MetaApiProvider implements ITradeProvider {
         logEvent({ event: "METAAPI_ACCOUNT_CREATED", providerAccountId: account.id, platform: input.platform });
       }
     } catch (error) {
+      const status = (error as { status?: number }).status;
+
+      // 401/403 here is about the token, not the broker: MetaApi accepted the
+      // request and refused the permission. Saying "check the connection" would
+      // send whoever reads this looking in the wrong place.
+      if (status === 401 || status === 403) {
+        const message =
+          `MetaApi refused to provision this account (${describeApiError(error)}). ` +
+          "METAAPI_TOKEN needs account provisioning access — or create the account in the MetaApi " +
+          "dashboard with this login and server, and it will be reused instead of created.";
+        logErrorEvent({ event: "METAAPI_PROVISIONING_FORBIDDEN", status, reason: describeApiError(error) });
+        throw new AppError(ErrorCode.PROVIDER_ERROR, message);
+      }
+
       throw this.connectionError(error);
     }
 
