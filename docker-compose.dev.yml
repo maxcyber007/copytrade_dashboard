@@ -1,0 +1,40 @@
+# Development dependencies only — PostgreSQL and Redis on the host ports, so the
+# app and the worker run natively with `npm run dev` / `npm run worker:dev`.
+# For the full containerised stack (app + worker + nginx) use docker-compose.yml.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: copytrade-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: copytrade
+      POSTGRES_PASSWORD: copytrade
+      POSTGRES_DB: copytrade
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copytrade"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: copytrade-redis-dev
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:

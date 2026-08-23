@@ -61,25 +61,18 @@ Details: [docs/architecture.md](docs/architecture.md)
 
 ## Installation
 
-Requirements: Node.js 22+, PostgreSQL 16, Redis 7 (or just Docker).
+Requirements: Node.js 22+ and Docker (or your own PostgreSQL 16 and Redis 7).
 
 ```bash
-npm install
-cp .env.example .env       # then fill in the secrets below
-npm run db:migrate         # create the schema
-npm run db:seed            # subscription plans (+ optional dev admin)
-npm run dev                # http://localhost:3000
-npm run worker:dev         # copy worker, separate process
+npm run setup        # .env with generated secrets, containers, migrations, seed
+npm run dev          # http://localhost:3000
+npm run worker:dev   # copy worker, separate terminal
 ```
 
-Generate the required secrets:
-
-```bash
-openssl rand -base64 48   # AUTH_SECRET
-openssl rand -base64 32   # ENCRYPTION_KEY  (must decode to exactly 32 bytes)
-openssl rand -hex 16      # MASTER_API_KEY
-openssl rand -hex 32      # MASTER_API_SECRET
-```
+`npm run setup` never overwrites an existing `.env`, and is safe to re-run.
+Setting up by hand, or not using Docker? See
+**[docs/getting-started.md](docs/getting-started.md)** for the step-by-step path,
+the first-run walkthrough and troubleshooting.
 
 **The first registered user automatically becomes `ADMIN`.** Every later
 registration is a `MEMBER`. Alternatively seed an admin with
@@ -111,7 +104,7 @@ Schema and index rationale: [docs/database.md](docs/database.md)
 With the app running (`npm run dev` or `docker compose up -d`):
 
 ```bash
-./scripts/smoke-test.sh                       # against http://localhost:3000
+npm run smoke                                 # against http://localhost:3000
 ./scripts/smoke-test.sh https://your-host     # or any deployment
 ```
 
