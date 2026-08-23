@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --incremental false",
     "worker": "tsx src/workers/main.ts",
     "worker:dev": "tsx watch src/workers/main.ts",
     "db:generate": "prisma generate",

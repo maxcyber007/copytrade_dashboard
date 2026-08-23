@@ -117,6 +117,7 @@ export interface MetaApiRpcConnection {
   getPosition(positionId: string): Promise<MetaApiPosition>;
   getSymbolSpecification(symbol: string): Promise<MetaApiSymbolSpecification>;
   getDealsByPosition(positionId: string): Promise<MetaApiDeals>;
+  getDealsByTimeRange(startTime: Date, endTime: Date, offset?: number, limit?: number): Promise<MetaApiDeals>;
 
   createMarketBuyOrder(
     symbol: string,

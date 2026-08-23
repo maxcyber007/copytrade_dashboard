@@ -92,17 +92,34 @@ provider response, error code and stack stay on the admin surfaces and in the lo
 
 ## Per-account trade history
 
-`/account/[id]/history` lists the positions that existed on one trading account,
-which is a different question from the copy history: that records every event and
-every attempt, successful or not, while this records what actually existed at the
-broker and what became of it — entry, exit, realised profit and why it closed.
+`/account/[id]/history` is the trade history of one trading account: **every**
+trade on it over the chosen window — 7, 30 or 90 days — whether this platform
+copied it or the member placed it themselves, each row marked as one or the
+other.
 
-Close price, profit and close reason are read back from the broker's own deal
-records (`ITradeProvider.getClosedPosition`) when a position ends, whether this
-platform closed it or a stop loss did. Nothing is inferred from prices: a
-position the broker has reported no result for shows a dash, and the account
-totals count only settled positions, saying how many are missing. Treating an
-unknown profit as zero would read as a flat trade rather than a missing one.
+It merges two sources that each know half the answer:
 
-Deals can lag a close by a moment, so the reconciliation sweep retries the
-lookup for recently closed positions that still have no figure.
+- **The broker** knows every trade the account ever held, including manual ones
+  and anything from before the account was connected, but nothing about
+  strategies. Read live through `ITradeProvider.getTradeHistory`, which rebuilds
+  trades from the account's deals: the entry deal gives the direction and open
+  price, the exit deals the close and the realised result, and profit is summed
+  with commission and swap because that is what actually moved the balance.
+  Deposits and withdrawals are not trades and are dropped.
+- **The platform** knows which position it copied and for which strategy. Copied
+  positions the broker did not return — still open, or outside the window — are
+  kept from its own records rather than silently dropped.
+
+Attribution is not cosmetic: a member's own trade credited to a strategy would
+misrepresent that strategy's results to everyone else considering it.
+
+When the broker cannot be reached the copied positions are still listed, above a
+line saying so. A short history that looks complete is worse than a stated gap.
+
+Position results (close price, realised profit, close reason) are also stored on
+`PositionMapping` as positions end — filled when this platform closes one, when
+the sweep finds one closed at the broker, and retried by the sweep for recently
+closed positions still missing a figure, since deals can lag a close. Where the
+broker has reported nothing, the history shows a dash and the totals count only
+settled trades: counting an unknown profit as zero would read as a flat trade
+rather than an absent one.

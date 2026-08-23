@@ -1,6 +1,7 @@
 import type { ITradeProvider } from "./ITradeProvider";
 import type {
   AccountInfo,
+  AccountTrade,
   ClosedPositionResult,
   CloseReason,
   ClosePositionRequest,
@@ -8,6 +9,7 @@ import type {
   ConnectionResult,
   ModifyPositionRequest,
   OpenPositionRequest,
+  OrderType,
   OrderResult,
   Platform,
   ProviderPosition,
@@ -28,7 +30,18 @@ import { AppError, ErrorCode } from "@/lib/errors";
 type MockPosition = ProviderPosition & { closed: boolean };
 
 /** What the simulated broker remembers about a position that ended. */
-type MockClose = { ticket: string; closePrice: number; profit: number; volume: number; closedAt: Date; reason: CloseReason };
+type MockClose = {
+  ticket: string;
+  symbol: string;
+  orderType: OrderType;
+  openPrice: number;
+  closePrice: number;
+  profit: number;
+  volume: number;
+  openedAt: Date;
+  closedAt: Date;
+  reason: CloseReason;
+};
 
 type MockAccount = {
   providerAccountId: string;
@@ -244,9 +257,13 @@ export class MockTradingProvider implements ITradeProvider {
     // simulation records them the way a real one would.
     account.closes.set(position.ticket, {
       ticket: position.ticket,
+      symbol: position.symbol,
+      orderType: position.orderType,
+      openPrice: position.openPrice,
       closePrice: position.currentPrice,
       profit,
       volume: closingVolume,
+      openedAt: position.openedAt,
       closedAt: new Date(),
       reason: "COPIED_CLOSE",
     });
@@ -286,6 +303,30 @@ export class MockTradingProvider implements ITradeProvider {
   async getClosedPosition(providerAccountId: string, ticket: string): Promise<ClosedPositionResult | null> {
     const account = this.require(providerAccountId);
     return account.closes.get(ticket) ?? null;
+  }
+
+  async getTradeHistory(
+    providerAccountId: string,
+    range: { from: Date; to: Date; limit?: number },
+  ): Promise<AccountTrade[]> {
+    const account = this.require(providerAccountId);
+
+    return [...account.closes.values()]
+      .filter((close) => close.closedAt >= range.from && close.closedAt <= range.to)
+      .sort((a, b) => b.closedAt.getTime() - a.closedAt.getTime())
+      .slice(0, range.limit ?? 500)
+      .map((close) => ({
+        ticket: close.ticket,
+        symbol: close.symbol,
+        orderType: close.orderType,
+        volume: close.volume,
+        openPrice: close.openPrice,
+        closePrice: close.closePrice,
+        profit: close.profit,
+        openedAt: close.openedAt,
+        closedAt: close.closedAt,
+        reason: close.reason,
+      }));
   }
 
   // -- helpers ---------------------------------------------------------------

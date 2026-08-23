@@ -102,6 +102,30 @@ export type ClosedPositionResult = {
   reason?: CloseReason;
 };
 
+/**
+ * One trade as the broker recorded it, reconstructed from its deals.
+ *
+ * This is the account's own history — every position it held, including trades
+ * the member placed by hand and trades from before the account was connected.
+ * It is read live from the broker, because the platform only ever stored the
+ * positions it copied itself.
+ */
+export type AccountTrade = {
+  ticket: string;
+  symbol: string;
+  orderType: OrderType;
+  volume: number;
+  openPrice?: number;
+  closePrice?: number;
+  /** Realised profit, including commission and swap. */
+  profit: number;
+  commission?: number;
+  swap?: number;
+  openedAt?: Date;
+  closedAt: Date;
+  reason?: CloseReason;
+};
+
 export type SymbolSpec = {
   symbol: string;
   minLot: number;

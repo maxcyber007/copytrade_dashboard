@@ -1,6 +1,7 @@
 import type { ITradeProvider } from "./ITradeProvider";
 import type {
   AccountInfo,
+  AccountTrade,
   ClosedPositionResult,
   CloseReason,
   ClosePositionRequest,
@@ -9,6 +10,7 @@ import type {
   ModifyPositionRequest,
   OpenPositionRequest,
   OrderResult,
+  OrderType,
   Platform,
   PositionMode,
   ProviderPosition,
@@ -511,6 +513,31 @@ export class MetaApiProvider implements ITradeProvider {
     };
   }
 
+  /**
+   * The account's own closed trades over a period, rebuilt from its deals.
+   *
+   * The platform only ever stored the positions it copied, so this is the only
+   * place a member's manual trades — or anything from before they connected —
+   * can come from. Deals are grouped by position: the entry deal carries the
+   * direction and open price, the exit deals carry the close and the result.
+   */
+  async getTradeHistory(
+    providerAccountId: string,
+    range: { from: Date; to: Date; limit?: number },
+  ): Promise<AccountTrade[]> {
+    const connection = await this.connection(providerAccountId);
+
+    let deals: MetaApiDeal[];
+    try {
+      const response = await connection.getDealsByTimeRange(range.from, range.to, 0, range.limit ?? 1000);
+      deals = response?.deals ?? [];
+    } catch (error) {
+      throw this.connectionError(error, providerAccountId);
+    }
+
+    return groupDealsIntoTrades(deals, range.limit ?? 500);
+  }
+
   // ------------------------------------------------------------------ trading
 
   async openPosition(providerAccountId: string, request: OpenPositionRequest): Promise<OrderResult> {
@@ -640,6 +667,71 @@ function positionModeOf(platform: Platform, marginMode: string | undefined): Pos
   const mode = (marginMode ?? "").toLowerCase();
   return mode.includes("netting") || mode === "exchange" ? "NETTING" : "HEDGING";
 }
+
+/**
+ * Rebuilds trades from deals.
+ *
+ * A position produces one entry deal and one or more exit deals; the trade is
+ * what they add up to. Deals with no position — deposits, withdrawals, credits,
+ * balance corrections — are not trades and are dropped, and a position still
+ * open (no exit deal) is not history yet.
+ */
+function groupDealsIntoTrades(deals: MetaApiDeal[], limit: number): AccountTrade[] {
+  const byPosition = new Map<string, MetaApiDeal[]>();
+
+  for (const deal of deals) {
+    if (!deal.positionId || !deal.symbol) continue;
+    const group = byPosition.get(deal.positionId);
+    if (group) group.push(deal);
+    else byPosition.set(deal.positionId, [deal]);
+  }
+
+  const trades: AccountTrade[] = [];
+
+  for (const [ticket, group] of byPosition) {
+    const entry = group.find((deal) => deal.entryType === "DEAL_ENTRY_IN");
+    const exits = group.filter((deal) => deal.entryType !== "DEAL_ENTRY_IN");
+    if (exits.length === 0) continue;
+
+    const last = exits[exits.length - 1]!;
+    const commission = sum(group, (deal) => deal.commission);
+    const swap = sum(group, (deal) => deal.swap);
+
+    trades.push({
+      ticket,
+      symbol: entry?.symbol ?? last.symbol ?? "",
+      orderType: directionOf(entry, last),
+      volume: exits.reduce((total, deal) => total + (deal.volume ?? 0), 0),
+      openPrice: entry?.price,
+      closePrice: last.price,
+      profit: round2(sum(group, (deal) => deal.profit) + commission + swap),
+      commission: round2(commission),
+      swap: round2(swap),
+      openedAt: entry?.time ? new Date(entry.time) : undefined,
+      closedAt: new Date(last.time),
+      reason: closeReasonOf(last.reason),
+    });
+  }
+
+  return trades.sort((a, b) => b.closedAt.getTime() - a.closedAt.getTime()).slice(0, limit);
+}
+
+/**
+ * Which way the position was held.
+ *
+ * The entry deal says it directly: a BUY position is opened by a buy deal. When
+ * the entry falls outside the requested window the exit says it by opposition,
+ * since a buy position is closed by a sell.
+ */
+function directionOf(entry: MetaApiDeal | undefined, exit: MetaApiDeal): OrderType {
+  if (entry) return entry.type === "DEAL_TYPE_SELL" ? "SELL" : "BUY";
+  return exit.type === "DEAL_TYPE_SELL" ? "BUY" : "SELL";
+}
+
+const sum = (deals: MetaApiDeal[], pick: (deal: MetaApiDeal) => number | undefined) =>
+  deals.reduce((total, deal) => total + (pick(deal) ?? 0), 0);
+
+const round2 = (value: number) => Number(value.toFixed(2));
 
 /** MT5 deal reasons, mapped to the platform's own vocabulary. */
 function closeReasonOf(reason: string | undefined): CloseReason | undefined {

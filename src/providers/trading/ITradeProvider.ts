@@ -1,5 +1,6 @@
 import type {
   AccountInfo,
+  AccountTrade,
   ClosedPositionResult,
   ClosePositionRequest,
   ConnectAccountInput,
@@ -43,6 +44,16 @@ export interface ITradeProvider {
    * platform made up.
    */
   getClosedPosition(providerAccountId: string, ticket: string): Promise<ClosedPositionResult | null>;
+
+  /**
+   * The account's own closed trades over a period, whoever placed them.
+   *
+   * The platform stores only the positions it copied, so a member's manual
+   * trades and anything from before they connected exist nowhere but at the
+   * broker. Balance operations — deposits, withdrawals, credits — are not
+   * trades and are left out.
+   */
+  getTradeHistory(providerAccountId: string, range: { from: Date; to: Date; limit?: number }): Promise<AccountTrade[]>;
 
   openPosition(providerAccountId: string, request: OpenPositionRequest): Promise<OrderResult>;
   modifyPosition(providerAccountId: string, request: ModifyPositionRequest): Promise<OrderResult>;

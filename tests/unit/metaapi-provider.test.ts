@@ -135,6 +135,10 @@ function makeSdk(overrides: Partial<FakeState> = {}) {
       if (state.dealsError) throw state.dealsError;
       return { deals: (state.deals[positionId] ?? []) as never[], synchronizing: false };
     },
+    async getDealsByTimeRange() {
+      if (state.dealsError) throw state.dealsError;
+      return { deals: Object.values(state.deals).flat() as never[], synchronizing: false };
+    },
     async createMarketBuyOrder(
       symbol: string,
       volume: number,
@@ -681,5 +685,65 @@ describe("the result of a closed position", () => {
     expect((await provider.getClosedPosition("meta-account-1", "sl"))?.reason).toBe("STOP_LOSS");
     expect((await provider.getClosedPosition("meta-account-1", "expert"))?.reason).toBe("COPIED_CLOSE");
     expect((await provider.getClosedPosition("meta-account-1", "manual"))?.reason).toBe("MANUAL");
+  });
+});
+
+describe("the account's own trade history", () => {
+  const at = (iso: string) => new Date(iso);
+
+  it("rebuilds trades from deals, including ones the platform never placed", async () => {
+    const sdk = makeSdk();
+    sdk.state.deals = {
+      "pos-a": [
+        { id: "1", type: "DEAL_TYPE_BUY", entryType: "DEAL_ENTRY_IN", positionId: "pos-a", symbol: "XAUUSD", volume: 0.05, price: 3340, profit: 0, commission: -0.35, time: at("2026-08-20T09:00:00Z") },
+        { id: "2", type: "DEAL_TYPE_SELL", entryType: "DEAL_ENTRY_OUT", positionId: "pos-a", symbol: "XAUUSD", volume: 0.05, price: 3352.5, profit: 12.5, commission: -0.35, swap: -0.3, time: at("2026-08-20T11:00:00Z"), reason: "DEAL_REASON_TP" },
+      ],
+      "pos-b": [
+        { id: "3", type: "DEAL_TYPE_SELL", entryType: "DEAL_ENTRY_IN", positionId: "pos-b", symbol: "EURUSD", volume: 0.1, price: 1.0842, profit: 0, time: at("2026-08-21T09:00:00Z") },
+        { id: "4", type: "DEAL_TYPE_BUY", entryType: "DEAL_ENTRY_OUT", positionId: "pos-b", symbol: "EURUSD", volume: 0.1, price: 1.0869, profit: -27, time: at("2026-08-21T10:00:00Z"), reason: "DEAL_REASON_SL" },
+      ],
+      // A deposit is not a trade: it has no position and no symbol.
+      balance: [{ id: "5", type: "DEAL_TYPE_BALANCE", entryType: "DEAL_ENTRY_IN", profit: 500, time: at("2026-08-19T09:00:00Z") }],
+      // Opened but not closed inside the window: not history yet.
+      "pos-open": [
+        { id: "6", type: "DEAL_TYPE_BUY", entryType: "DEAL_ENTRY_IN", positionId: "pos-open", symbol: "US30", volume: 0.03, price: 38910, profit: 0, time: at("2026-08-22T09:00:00Z") },
+      ],
+    };
+
+    const trades = await makeProvider(sdk).getTradeHistory("meta-account-1", {
+      from: at("2026-08-01T00:00:00Z"),
+      to: at("2026-08-31T00:00:00Z"),
+    });
+
+    expect(trades.map((trade) => trade.ticket)).toEqual(["pos-b", "pos-a"]);
+
+    const gold = trades.find((trade) => trade.ticket === "pos-a")!;
+    expect(gold.orderType).toBe("BUY");
+    expect(gold.openPrice).toBe(3340);
+    expect(gold.closePrice).toBe(3352.5);
+    // 12.5 gross, less 0.70 commission and 0.30 swap.
+    expect(gold.profit).toBeCloseTo(11.5, 2);
+    expect(gold.reason).toBe("TAKE_PROFIT");
+
+    // A sell position is opened by a sell deal and closed by a buy one.
+    expect(trades.find((trade) => trade.ticket === "pos-b")!.orderType).toBe("SELL");
+  });
+
+  it("reads the direction from the exit when the entry predates the window", async () => {
+    const sdk = makeSdk();
+    sdk.state.deals = {
+      old: [
+        { id: "7", type: "DEAL_TYPE_SELL", entryType: "DEAL_ENTRY_OUT", positionId: "old", symbol: "XAUUSD", volume: 0.1, price: 3400, profit: 40, time: at("2026-08-23T09:00:00Z") },
+      ],
+    };
+
+    const [trade] = await makeProvider(sdk).getTradeHistory("meta-account-1", {
+      from: at("2026-08-22T00:00:00Z"),
+      to: at("2026-08-24T00:00:00Z"),
+    });
+
+    // Closed by a sell, so it was held long.
+    expect(trade!.orderType).toBe("BUY");
+    expect(trade!.openPrice).toBeUndefined();
   });
 });
