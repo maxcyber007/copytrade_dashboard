@@ -23,3 +23,7 @@ pnpm-debug.log*
 .DS_Store
 .idea/
 .vscode/
+
+# Redis snapshot, written wherever redis-server is started from.
+dump.rdb
+*.rdb
