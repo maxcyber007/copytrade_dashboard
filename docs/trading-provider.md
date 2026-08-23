@@ -86,7 +86,7 @@ fails with a message naming the install command rather than at order time.
 
 | Interface method | MetaApi call |
 | --- | --- |
-| `connectAccount` | reuse the account matching this login and server, else `createAccount` (`magic: 0`, `cloud-g1`), then `deploy()`, `waitConnected()`, `getRPCConnection()`, `connect()`, `waitSynchronized()` |
+| `connectAccount` | reuse the account matching this login and server, else `createAccount` (`magic: 0`), then `deploy()`, `waitConnected()`, `getRPCConnection()`, `connect()`, `waitSynchronized()` |
 | `getAccountInfo` | `getAccountInformation()` |
 | `getPositions` | `getPositions()` |
 | `getSymbolSpec` | `getSymbolSpecification(symbol)` — a symbol the broker does not offer returns `null`, which the copy engine treats as a skip |
@@ -114,6 +114,21 @@ Four details decide whether a copy is correct, and each is easy to get wrong:
 - **Volume limits are per symbol, not per account.** `connectAccount` reports a
   permissive account-level floor (0.01 / 100 / 0.01); the per-symbol specification
   is the authority, and the copy engine takes the stricter of the two.
+
+### Configuration
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `METAAPI_TOKEN` | — | required when `TRADING_PROVIDER=metaapi`; the app refuses to start without it |
+| `METAAPI_REGION` | `new-york` | one of the regions MetaApi lists for your account |
+| `METAAPI_ACCOUNT_TYPE` | `cloud-g2` | MetaApi's own default — "faster and cheaper" than `cloud-g1` |
+| `METAAPI_RELIABILITY` | `regular` | `high` is a **paid** option billed at two resource slots; asking for it on a subscription that does not include it fails account creation |
+
+A failed MetaApi call is reported with its HTTP status and, for a validation
+failure, the `details` object naming the field it rejected — the `message` alone
+is often just a request id. Anything credential-shaped in those details is
+redacted before it reaches a log, because a rejected `createAccount` echoes back
+the payload, and that payload carries the member's trading password.
 
 Error codes are mapped from `stringCode` first (identical on MT4 and MT5), then
 from `numericCode` — MT5 trade return codes (10004–10040) and MT4 error codes

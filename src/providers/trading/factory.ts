@@ -28,6 +28,8 @@ export function getTradeProvider(): ITradeProvider {
       provider = new MetaApiProvider({
         token: getEnv().METAAPI_TOKEN ?? "",
         region: getEnv().METAAPI_REGION ?? "new-york",
+        accountType: getEnv().METAAPI_ACCOUNT_TYPE,
+        reliability: getEnv().METAAPI_RELIABILITY,
       });
       break;
     default:

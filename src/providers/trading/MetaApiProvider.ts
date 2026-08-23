@@ -67,6 +67,19 @@ const DEFAULT_MIN_LOT = 0.01;
 const DEFAULT_MAX_LOT = 100;
 const DEFAULT_LOT_STEP = 0.01;
 
+/**
+ * MetaApi's own documented default: "executing accounts as cloud-g2 is faster
+ * and cheaper". Overridable, because a broker that only works on G1 exists.
+ */
+const DEFAULT_ACCOUNT_TYPE = "cloud-g2";
+
+/**
+ * High reliability is a **paid** MetaApi option billed at two resource slots,
+ * so asking for it by default fails on a subscription that does not include it.
+ * Production deployments can set METAAPI_RELIABILITY=high deliberately.
+ */
+const DEFAULT_RELIABILITY = "regular";
+
 /** MT5 trade return codes (ENUM_TRADE_RETURN_CODE) mapped to platform codes. */
 const NUMERIC_CODE_MAP: Record<number, string> = {
   10004: ErrorCode.TIMEOUT, // REQUOTE
@@ -135,6 +148,10 @@ export type MetaApiProviderConfig = {
   region: string;
   /** How long to wait for the terminal to reach the broker. */
   connectTimeoutSeconds?: number;
+  /** `cloud-g2` (default) or `cloud-g1`. */
+  accountType?: string;
+  /** `regular` (default) or `high` — high reliability is a paid MetaApi option. */
+  reliability?: string;
   /** Injected by tests so the adapter can be exercised without the package. */
   loadSdk?: () => Promise<MetaApiConstructor>;
 };
@@ -244,9 +261,9 @@ export class MetaApiProvider implements ITradeProvider {
 
   private connectionError(error: unknown, providerAccountId?: string): AppError {
     if (error instanceof AppError) return error;
-    const message = error instanceof Error ? error.message : "unknown error";
-    logErrorEvent({ event: "METAAPI_CONNECTION_FAILED", providerAccountId, reason: message });
-    return new AppError(ErrorCode.PLATFORM_CONNECTION_ERROR, `MetaApi connection failed: ${message}`);
+    const described = describeApiError(error);
+    logErrorEvent({ event: "METAAPI_CONNECTION_FAILED", providerAccountId, reason: described });
+    return new AppError(ErrorCode.PLATFORM_CONNECTION_ERROR, `MetaApi connection failed: ${described}`);
   }
 
   // ------------------------------------------------------------------ account
@@ -284,9 +301,9 @@ export class MetaApiProvider implements ITradeProvider {
           // Magic 0: the member's own manual trades must stay untouched, and we
           // identify our orders by clientId rather than by magic number.
           magic: 0,
-          type: "cloud-g1",
+          type: this.config.accountType ?? DEFAULT_ACCOUNT_TYPE,
           region: this.config.region,
-          reliability: "high",
+          reliability: this.config.reliability ?? DEFAULT_RELIABILITY,
         }));
 
       if (!match) {
@@ -552,6 +569,51 @@ function toProviderPosition(position: MetaApiPosition): ProviderPosition {
     // comment, which is where the copy engine looks for it.
     comment: position.clientId ?? position.comment,
   };
+}
+
+/** Keys whose values must never reach a log. */
+const SECRET_KEY = /pass|token|secret|credential|authorization/i;
+
+/** Recursively replaces secret-looking values, so details can be logged safely. */
+function redact(value: unknown, depth = 0): unknown {
+  if (depth > 4 || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((entry) => redact(entry, depth + 1));
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+      key,
+      SECRET_KEY.test(key) ? "[redacted]" : redact(entry, depth + 1),
+    ]),
+  );
+}
+
+/**
+ * Turns a MetaApi error into something worth reading.
+ *
+ * `ApiError` carries the HTTP status and, for a validation failure, a `details`
+ * object naming the field it rejected — while its `message` is often just a
+ * request id. Reporting only the message leaves nobody able to say what went
+ * wrong, so status, code and details are included, with anything
+ * credential-shaped redacted first.
+ */
+export function describeApiError(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown error";
+
+  const api = error as Error & { status?: number; code?: string; details?: unknown };
+  const parts = [error.message.trim() || error.name];
+
+  if (typeof api.status === "number") parts.push(`HTTP ${api.status}`);
+  if (typeof api.code === "string" && api.code) parts.push(`code ${api.code}`);
+
+  if (api.details !== undefined && api.details !== null) {
+    try {
+      parts.push(`details ${JSON.stringify(redact(api.details))}`);
+    } catch {
+      // A details object that will not serialise tells us nothing anyway.
+    }
+  }
+
+  return parts.join(" — ");
 }
 
 function mapTradeErrorCode(stringCode: string | undefined, numericCode: number | undefined): string {

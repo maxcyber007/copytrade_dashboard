@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { MetaApiProvider } from "@/providers/trading/MetaApiProvider";
+import { MetaApiProvider, describeApiError } from "@/providers/trading/MetaApiProvider";
 import type {
   MetaApiAccountInformation,
   MetaApiConstructor,
@@ -249,9 +249,17 @@ describe("connecting an account", () => {
     expect(result.currency).toBe("USD");
     expect(result.positionMode).toBe("NETTING");
 
-    // magic 0 keeps the member's own manual trades out of our way.
+    // magic 0 keeps the member's own manual trades out of our way; cloud-g2 is
+    // MetaApi's documented default, and high reliability is a paid option that
+    // a subscription without it rejects outright.
     expect(sdk.state.createdAccounts).toHaveLength(1);
-    expect(sdk.state.createdAccounts[0]).toMatchObject({ magic: 0, platform: "mt5", login: "123456" });
+    expect(sdk.state.createdAccounts[0]).toMatchObject({
+      magic: 0,
+      platform: "mt5",
+      login: "123456",
+      type: "cloud-g2",
+      reliability: "regular",
+    });
   });
 
   it("reports MT4 as hedging whatever the margin mode says", async () => {
@@ -450,5 +458,45 @@ describe("disconnecting", () => {
     // Undeploying is a provisioning decision with a billing effect, and other
     // subscriptions may still be trading on this terminal.
     expect(sdk.state.deployed).toBe(true);
+  });
+});
+
+describe("error reporting", () => {
+  it("surfaces the status and the rejected field, not just the request id", () => {
+    // MetaApi answers a bad account payload with a message that is only a
+    // request id; everything usable is in status and details.
+    const error = Object.assign(new Error("(7aebb639facf4b64aa17e8131287f2dc)"), {
+      status: 400,
+      code: "ValidationError",
+      details: [{ parameter: "reliability", message: "not allowed for your subscription" }],
+    });
+
+    const described = describeApiError(error);
+
+    expect(described).toContain("HTTP 400");
+    expect(described).toContain("reliability");
+    expect(described).toContain("not allowed for your subscription");
+  });
+
+  it("never lets a credential reach the log", () => {
+    const error = Object.assign(new Error("rejected"), {
+      status: 400,
+      details: { login: "52821094", password: "hunter2", nested: { accessToken: "abc123" } },
+    });
+
+    const described = describeApiError(error);
+
+    // The details of a rejected createAccount echo back the payload, which
+    // carries the member's trading password.
+    expect(described).not.toContain("hunter2");
+    expect(described).not.toContain("abc123");
+    expect(described).toContain("[redacted]");
+    // Non-secret context is still there, or there was no point logging it.
+    expect(described).toContain("52821094");
+  });
+
+  it("reports something usable for an error carrying nothing but a name", () => {
+    expect(describeApiError(new TypeError(""))).toBe("TypeError");
+    expect(describeApiError("not an error")).toBe("unknown error");
   });
 });

@@ -20,6 +20,10 @@ const schema = z.object({
   TRADING_PROVIDER: z.enum(["mock", "metaapi"]).default("mock"),
   METAAPI_TOKEN: z.string().optional(),
   METAAPI_REGION: z.string().optional(),
+  /** `cloud-g2` is MetaApi's documented default: faster and cheaper than G1. */
+  METAAPI_ACCOUNT_TYPE: z.enum(["cloud-g2", "cloud-g1"]).default("cloud-g2"),
+  /** `high` is a paid MetaApi option billed at two resource slots. */
+  METAAPI_RELIABILITY: z.enum(["regular", "high"]).default("regular"),
 
   MASTER_API_KEY: z.string().min(8),
   MASTER_API_SECRET: z.string().min(16),
