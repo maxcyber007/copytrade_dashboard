@@ -111,7 +111,7 @@ Schema and index rationale: [docs/database.md](docs/database.md)
 With the app running (`npm run dev` or `docker compose up -d`):
 
 ```bash
-npm run smoke                                   # 75 checks against http://localhost:3000
+npm run smoke                                   # 85 checks against http://localhost:3000
 node scripts/smoke-test.mjs https://your-host   # or any deployment
 npm run demo                                    # drive a master trade to member accounts
 ```
@@ -179,6 +179,9 @@ Implemented today:
 | POST | `/api/auth/register` | Create account, start session |
 | POST | `/api/auth/login` | Authenticate, start session |
 | POST | `/api/auth/logout` | Revoke session |
+| POST | `/api/auth/forgot-password` | Request a reset link (identical response either way) |
+| GET/POST | `/api/auth/reset-password` | Check a link, or set a new password |
+| GET/POST | `/api/notifications` | Member notifications, and marking them read |
 | GET | `/api/auth/session` | Current user or `null` |
 | GET | `/api/health` | Database / Redis / provider health |
 | GET/POST | `/api/provider/apply` | Own provider application: read state, or apply |
@@ -230,6 +233,25 @@ Three properties carry the safety:
 
 See [docs/copy-engine.md](docs/copy-engine.md).
 
+## Password reset and email
+
+Members reset their own password: a single-use link, valid for
+`PASSWORD_RESET_TTL_MINUTES` (30 by default), delivered by the configured email
+provider. Only the token's hash is stored, completing a reset revokes every
+session, and the request endpoint answers identically whether or not the address
+is registered.
+
+Delivery goes through `IEmailProvider`. `console` prints messages to the log for
+development and is **refused in production**, because a reset link must not live
+in a log file; `smtp` sends for real. See [docs/security.md](docs/security.md).
+
+## Background jobs
+
+The worker also runs two scheduled sweeps: it reconciles every connected account
+with its broker (catching stop losses, take profits and manual closes that
+produce no event), and recomputes strategy statistics from reported profits. See
+[docs/background-jobs.md](docs/background-jobs.md).
+
 ## Security
 
 - Argon2id password hashing; sessions stored as SHA-256 hashes, raw token only in an
@@ -248,7 +270,7 @@ See [docs/security.md](docs/security.md).
 
 ```bash
 npm run test     # unit + integration (vitest)
-npm run smoke    # 75 end-to-end checks against a running server
+npm run smoke    # 85 end-to-end checks against a running server
 npm run verify   # everything CI runs
 ```
 

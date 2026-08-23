@@ -27,6 +27,20 @@ const schema = z.object({
 
   PAYMENT_PROVIDER: z.enum(["mock", "stripe", "omise"]).default("mock"),
 
+  // Email: console prints to the log (development only), smtp actually sends.
+  EMAIL_PROVIDER: z.enum(["console", "smtp"]).default("console"),
+  EMAIL_FROM: z.string().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  /** Reset links expire quickly; a long-lived link is a standing key to an account. */
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
+
+  /** Background job cadence. */
+  SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(15).default(60),
+  STATS_INTERVAL_SECONDS: z.coerce.number().int().min(60).default(300),
+
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   RATE_LIMIT_ENABLED: z
     .string()

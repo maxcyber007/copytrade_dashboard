@@ -12,6 +12,7 @@ import { resolveMemberSymbol } from "./symbol-mapping.service";
 import { AuditAction, recordAudit } from "./audit.service";
 import { ensureProviderSession } from "./account.service";
 import { publishUserEvent } from "@/lib/events";
+import { notify } from "./notification.service";
 
 /** Contract sizes used for risk-percent sizing when the broker does not report one. */
 const CONTRACT_SIZES: Record<string, number> = {
@@ -605,16 +606,18 @@ async function pauseForBreach(subscription: MemberContext["subscription"], reaso
         breachedAt: new Date(),
       },
     }),
-    prisma.notification.create({
-      data: {
-        userId: subscription.userId,
-        type: "WARNING",
-        title: "Copying paused by a risk limit",
-        message: reason,
-        link: "/strategies",
-      },
-    }),
   ]);
+
+  // A member whose limit just fired is not watching the dashboard, so this one
+  // goes to their inbox as well.
+  await notify({
+    userId: subscription.userId,
+    type: "WARNING",
+    title: "Copying paused by a risk limit",
+    message: reason,
+    link: "/strategies",
+    email: true,
+  });
 
   await recordAudit({
     action: AuditAction.RISK_TRIGGERED,

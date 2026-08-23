@@ -2,6 +2,8 @@ import "dotenv/config";
 import { logger } from "@/lib/logger";
 import { getEnv } from "@/lib/env";
 import { startCopyWorker } from "./copy.worker";
+import { startSyncWorker } from "./sync.worker";
+import { scheduleMaintenanceJobs } from "./queues";
 
 /**
  * Worker entrypoint. Runs as its own process (see the `worker` service in
@@ -10,14 +12,27 @@ import { startCopyWorker } from "./copy.worker";
  */
 async function main() {
   const env = getEnv();
-  const worker = startCopyWorker();
 
-  logger.info({ event: "WORKER_STARTED", provider: env.TRADING_PROVIDER, queues: ["copy-trade"] });
+  const copyWorker = startCopyWorker();
+  const syncWorker = startSyncWorker();
+
+  await scheduleMaintenanceJobs({
+    syncSeconds: env.SYNC_INTERVAL_SECONDS,
+    statsSeconds: env.STATS_INTERVAL_SECONDS,
+  });
+
+  logger.info({
+    event: "WORKER_STARTED",
+    provider: env.TRADING_PROVIDER,
+    queues: ["copy-trade", "position-sync"],
+    syncSeconds: env.SYNC_INTERVAL_SECONDS,
+    statsSeconds: env.STATS_INTERVAL_SECONDS,
+  });
 
   const shutdown = async (signal: string) => {
     logger.info({ event: "WORKER_SHUTDOWN", signal });
-    // Let an in-flight copy finish rather than abandoning a half-sent order.
-    await worker.close();
+    // Let in-flight work finish rather than abandoning a half-sent order.
+    await Promise.all([copyWorker.close(), syncWorker.close()]);
     process.exit(0);
   };
 

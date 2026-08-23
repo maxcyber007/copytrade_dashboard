@@ -23,6 +23,24 @@ safety over convenience.
 - IDOR protection: every account/subscription query filters by the session user's id.
   Ownership is a `WHERE` clause, not a client-supplied flag.
 
+## Password reset
+
+- The request endpoint answers identically for a registered and an unknown
+  address, and a delivery failure does not change that: returning an error only
+  for addresses that exist would turn the form into a user-enumeration oracle.
+  A failure is logged and recorded as a `CRITICAL` `SystemError` instead, because
+  silence towards a stranger must not mean silence towards the operator.
+- Only `sha256(token)` is stored, so a database dump cannot reset anyone's
+  password.
+- A link is single-use and short-lived (`PASSWORD_RESET_TTL_MINUTES`, 30 by
+  default), and requesting a new one invalidates any earlier link.
+- Completing a reset revokes **every** session: if the account was taken over,
+  the attacker's session dies with the password that let them in.
+- Rate limited per IP and per address.
+- `EMAIL_PROVIDER=console` writes messages, including reset links, to the log.
+  The factory refuses that combination in production rather than trusting the
+  operator to notice.
+
 ## Browser-facing hardening
 
 - A Content Security Policy restricts every source to the origin:

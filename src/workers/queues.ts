@@ -9,6 +9,13 @@ export const QueueName = {
 
 export type CopyJobData = { eventId: string; strategyId: string };
 
+export type MaintenanceJobData = Record<string, never>;
+
+export const MaintenanceJob = {
+  ACCOUNT_SYNC: "account-sync",
+  STRATEGY_STATS: "strategy-stats",
+} as const;
+
 /**
  * Three attempts with exponential backoff. The worker re-checks live positions
  * before each retry, so a retry can confirm an order that did land rather than
@@ -21,13 +28,52 @@ export const COPY_JOB_OPTIONS = {
   removeOnFail: { age: 60 * 60 * 24 * 7 },
 };
 
-const globalForQueues = globalThis as unknown as { copyQueue?: Queue<CopyJobData> };
+const globalForQueues = globalThis as unknown as {
+  copyQueue?: Queue<CopyJobData>;
+  maintenanceQueue?: Queue<MaintenanceJobData>;
+};
 
 export function getCopyQueue(): Queue<CopyJobData> {
   if (globalForQueues.copyQueue) return globalForQueues.copyQueue;
   const queue = new Queue<CopyJobData>(QueueName.COPY_TRADE, { connection: redisConnectionOptions() });
   globalForQueues.copyQueue = queue;
   return queue;
+}
+
+export function getMaintenanceQueue(): Queue<MaintenanceJobData> {
+  if (globalForQueues.maintenanceQueue) return globalForQueues.maintenanceQueue;
+  const queue = new Queue<MaintenanceJobData>(QueueName.POSITION_SYNC, { connection: redisConnectionOptions() });
+  globalForQueues.maintenanceQueue = queue;
+  return queue;
+}
+
+/**
+ * Registers the recurring jobs.
+ *
+ * `upsertJobScheduler` is keyed by the scheduler id, so restarting the worker —
+ * or running several of them — re-uses the one schedule instead of stacking
+ * another copy of it.
+ */
+export async function scheduleMaintenanceJobs(intervals: { syncSeconds: number; statsSeconds: number }) {
+  const queue = getMaintenanceQueue();
+
+  await queue.upsertJobScheduler(
+    MaintenanceJob.ACCOUNT_SYNC,
+    { every: intervals.syncSeconds * 1000 },
+    {
+      name: MaintenanceJob.ACCOUNT_SYNC,
+      opts: { removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } },
+    },
+  );
+
+  await queue.upsertJobScheduler(
+    MaintenanceJob.STRATEGY_STATS,
+    { every: intervals.statsSeconds * 1000 },
+    {
+      name: MaintenanceJob.STRATEGY_STATS,
+      opts: { removeOnComplete: { count: 50 }, removeOnFail: { count: 100 } },
+    },
+  );
 }
 
 /**

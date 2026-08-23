@@ -45,6 +45,9 @@ const NON_SECRET_VALUE = [
   /process\.env/,
   /[(`]/, // an expression rather than a literal, e.g. dotenv.match(...)
   /^["']?(ci|test|dummy|example|changeme|placeholder|your)[-_]/i,
+  // A connection string pointing at a local or compose-internal host is a
+  // development default, not a credential that unlocks anything remote.
+  /@(localhost|127\.0\.0\.1|postgres|redis|db):/,
 ];
 
 function isRealSecret(line, regex) {

@@ -15,6 +15,11 @@ export default async function LoginPage() {
       </div>
       <AuthForm mode="login" />
       <p className="text-sm text-muted">
+        <Link href="/forgot-password" className="text-gold hover:underline">
+          Forgot your password?
+        </Link>
+      </p>
+      <p className="text-sm text-muted">
         No account yet?{" "}
         <Link href="/register" className="text-brand-500 hover:underline">
           Create one

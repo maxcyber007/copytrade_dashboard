@@ -14,6 +14,7 @@ export type LiveEvent =
   | { type: "ACCOUNT_UPDATED"; accountId: string; at: string }
   | { type: "COPY_STATUS"; subscriptionId: string; status: string; at: string }
   | { type: "RISK_BREACH"; reason: string; at: string }
+  | { type: "NOTIFICATION"; title: string; message: string; at: string }
   | { type: "PING"; at: string };
 
 const channelFor = (userId: string) => `live:user:${userId}`;

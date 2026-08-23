@@ -205,12 +205,29 @@ model User {
 
   /// A member becomes a signal provider by applying; the profile carries the
   /// application and, once approved, their published strategies.
-  providerProfile   ProviderProfile?  @relation("ProviderOwner")
-  reviewedProviders ProviderProfile[] @relation("ProviderReviewer")
+  providerProfile     ProviderProfile?     @relation("ProviderOwner")
+  reviewedProviders   ProviderProfile[]    @relation("ProviderReviewer")
+  passwordResetTokens PasswordResetToken[]
 
   @@index([role])
   @@index([status])
   @@index([createdAt])
+}
+
+/// Single-use password reset token. Only a hash is stored, so a database dump
+/// cannot be used to reset anyone's password.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  ipAddress String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Session {

@@ -35,7 +35,7 @@ npm run worker:dev   # the copy worker (Phase 8 onward; it idles for now)
 Verify it:
 
 ```bash
-npm run smoke        # 65 automated checks against the running server
+npm run smoke        # 85 automated checks against the running server
 ```
 
 Both `npm run setup` and `npm run smoke` are Node scripts
@@ -113,7 +113,7 @@ SEED_ADMIN_EMAIL=you@example.com SEED_ADMIN_PASSWORD='ChangeMe123' npm run db:se
 |---|---|
 | `npm run dev` | Next.js dev server on :3000 |
 | `npm run worker:dev` | Copy worker, separate process, reloads on change |
-| `npm run smoke` | 65 end-to-end checks against the running server |
+| `npm run smoke` | 85 end-to-end checks against the running server |
 | `npm run demo` | Drives a master trade through the copy engine to member accounts (needs the worker running) |
 | `npm run test` | Unit tests (vitest) |
 | `npm run typecheck` | `tsc --noEmit` |

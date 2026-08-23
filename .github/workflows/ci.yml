@@ -40,13 +40,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://copytrade:copytrade@localhost:5432/copytrade_ci?schema=public
       REDIS_URL: redis://localhost:6379
-      # CI-only values. Production secrets never live in a workflow file.
-      AUTH_SECRET: ci-auth-secret-that-is-long-enough-to-pass-validation
-      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS10aGF0LWlzLTMyYnl0ZQ==
-      MASTER_API_KEY: ci-master-key
-      MASTER_API_SECRET: ci-master-secret-value-for-hmac-checks
       TRADING_PROVIDER: mock
       PAYMENT_PROVIDER: mock
+      EMAIL_PROVIDER: console
       RATE_LIMIT_ENABLED: "false"
 
     steps:
@@ -58,6 +54,17 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Generated per run rather than written into the file: a workflow should
+      # contain no secret-shaped literals at all, real or not.
+      - name: Generate ephemeral CI secrets
+        run: |
+          {
+            echo "AUTH_SECRET=$(openssl rand -base64 48)"
+            echo "ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "MASTER_API_KEY=$(openssl rand -hex 16)"
+            echo "MASTER_API_SECRET=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
 
       - name: Check for committed secrets
         run: npm run check:secrets

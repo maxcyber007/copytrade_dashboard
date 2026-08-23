@@ -181,6 +181,45 @@ console.log("\nLogin");
 }
 
 // ---------------------------------------------------------------------------
+console.log("\nPassword reset");
+{
+  // The response must not differ between a registered and an unknown address:
+  // this form is unauthenticated, and a difference would enumerate members.
+  const known = await request("POST", "/api/auth/forgot-password", { body: { email }, cookies: false });
+  const unknown = await request("POST", "/api/auth/forgot-password", {
+    body: { email: `no-such-${rand}@example.com` },
+    cookies: false,
+  });
+
+  check("reset request for a known address succeeds", known.status === 200, `got ${known.status}: ${known.text}`);
+  check(
+    "unknown address gets the identical response",
+    unknown.status === known.status && unknown.text === known.text,
+    `${known.status} ${known.text} vs ${unknown.status} ${unknown.text}`,
+  );
+
+  const invalidToken = await request("GET", "/api/auth/reset-password?token=" + "x".repeat(40), { cookies: false });
+  check("an unknown reset token is reported invalid", invalidToken.json?.data?.valid === false, invalidToken.text);
+
+  const usedToken = await request("POST", "/api/auth/reset-password", {
+    body: { token: "y".repeat(40), password: "BrandNewPass456" },
+    cookies: false,
+  });
+  check("resetting with an unknown token is refused", usedToken.status === 400, `got ${usedToken.status}`);
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nNotifications");
+{
+  const list = await request("GET", "/api/notifications");
+  check("member can read their notifications", list.status === 200, `got ${list.status}`);
+  check("unread count is reported", typeof list.json?.data?.unread === "number", list.text);
+
+  const anonymous = await request("GET", "/api/notifications", { cookies: false });
+  check("notifications require a session", anonymous.status === 401, `got ${anonymous.status}`);
+}
+
+// ---------------------------------------------------------------------------
 console.log("\nAccess control");
 {
   const anonymous = await request("GET", "/dashboard", { cookies: false });

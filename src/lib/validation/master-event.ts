@@ -29,6 +29,8 @@ export const masterEventSchema = z.object({
   price: z.coerce.number().nonnegative(),
   sl: z.coerce.number().nonnegative().nullable().optional(),
   tp: z.coerce.number().nonnegative().nullable().optional(),
+  /** Realised profit on the master position, reported on CLOSE. */
+  profit: z.coerce.number().nullable().optional(),
   /** Master account context, used for balance-ratio sizing. */
   masterBalance: z.coerce.number().nonnegative().nullable().optional(),
   masterEquity: z.coerce.number().nonnegative().nullable().optional(),

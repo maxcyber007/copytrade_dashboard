@@ -203,10 +203,20 @@ export async function syncAccount(id: string, userId: string) {
  * a restart — has none. Rather than failing the copy, the session is
  * re-established from the stored credentials and the work continues.
  */
-export async function ensureProviderSession(accountId: string): Promise<string> {
+export async function ensureProviderSession(
+  accountId: string,
+  options: { allowRecovery?: boolean } = {},
+): Promise<string> {
   const account = await prisma.tradingAccount.findUnique({ where: { id: accountId } });
   if (!account) throw new AppError(ErrorCode.NOT_FOUND, "Trading account not found");
-  if (account.connectionStatus !== "CONNECTED") {
+
+  // The reconcile sweep passes allowRecovery so an account left in ERROR can
+  // come back on its own once the broker is reachable again.
+  const usable =
+    account.connectionStatus === "CONNECTED" ||
+    (options.allowRecovery === true && account.connectionStatus === "ERROR");
+
+  if (!usable) {
     throw new AppError(ErrorCode.PLATFORM_CONNECTION_ERROR, "Account is not connected");
   }
   if (!account.providerAccountId || !account.encryptedPassword) {

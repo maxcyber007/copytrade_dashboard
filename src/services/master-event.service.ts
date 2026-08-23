@@ -185,7 +185,13 @@ async function storeEvent(
       sl: input.sl ?? null,
       tp: input.tp ?? null,
       ...(input.eventType === "CLOSE"
-        ? { status: "CLOSED", closePrice: input.price, closedAt: new Date(input.timestamp) }
+        ? {
+            status: "CLOSED",
+            closePrice: input.price,
+            closedAt: new Date(input.timestamp),
+            // Only what the EA actually reported; nothing is inferred from price.
+            ...(input.profit === null || input.profit === undefined ? {} : { profit: input.profit }),
+          }
         : {}),
       ...(input.eventType === "PARTIAL_CLOSE" ? { status: "PARTIALLY_CLOSED" } : {}),
     },
