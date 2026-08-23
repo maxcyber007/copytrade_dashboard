@@ -110,6 +110,14 @@ It merges two sources that each know half the answer:
   positions the broker did not return — still open, or outside the window — are
   kept from its own records rather than silently dropped.
 
+Rows are paged, 25 / 50 / 100 / 200 at a time. Page, size and window all live in
+the query string, so a view is a link — shareable and surviving a reload. The
+totals above the table are for the whole window, not the page on screen: a net
+profit that changed when someone turned a page would be describing nothing.
+Changing the size or the window returns to the first page, since the old page
+number points at different trades, and a page number past the end is clamped
+rather than rendering an empty table that reads as a history with nothing in it.
+
 Attribution is not cosmetic: a member's own trade credited to a strategy would
 misrepresent that strategy's results to everyone else considering it.
 

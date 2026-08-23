@@ -6,6 +6,7 @@ import { getAccountTradeHistory } from "@/services/trade-history.service";
 import { Table, Td, Th } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatLot, toNumber } from "@/lib/utils";
+import { Pagination, paginate, parsePage, parsePageSize } from "@/components/ui/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -38,10 +39,10 @@ export default async function AccountHistoryPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<{ days?: string; size?: string; page?: string }>;
 }) {
   const { id } = await params;
-  const { days: daysParam } = await searchParams;
+  const { days: daysParam, size: sizeParam, page: pageParam } = await searchParams;
   const user = await requireUser();
 
   // getAccount scopes to the owner, so another member's id is a 404 rather
@@ -53,6 +54,20 @@ export default async function AccountHistoryPage({
   const history = await getAccountTradeHistory(id, user.id, { days });
 
   const settled = history.totals.wins + history.totals.losses;
+
+  const size = parsePageSize(sizeParam);
+  const page = parsePage(pageParam, history.rows.length, size);
+  const rows = paginate(history.rows, page, size);
+
+  // Every filter belongs in the URL, so a page or size change keeps the rest.
+  const hrefFor = (next: { days?: number; page?: number; size?: number }) => {
+    const query = new URLSearchParams({
+      days: String(next.days ?? days),
+      size: String(next.size ?? size),
+      page: String(next.page ?? page),
+    });
+    return `/account/${id}/history?${query.toString()}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -71,7 +86,9 @@ export default async function AccountHistoryPage({
         {RANGES.map((range) => (
           <Link
             key={range}
-            href={`/account/${id}/history?days=${range}`}
+            // A different window is a different set of trades, so the reader
+            // starts at its first page rather than page 4 of something else.
+            href={hrefFor({ days: range, page: 1 })}
             className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
               range === days ? "border-[var(--gold-line)] text-gold" : "text-muted hover:text-gold"
             }`}
@@ -140,7 +157,7 @@ export default async function AccountHistoryPage({
             </tr>
           </thead>
           <tbody>
-            {history.rows.map((row) => (
+            {rows.map((row) => (
               <tr key={row.ticket}>
                 <Td className="whitespace-nowrap text-xs">
                   {row.closedAt ? (
@@ -193,6 +210,15 @@ export default async function AccountHistoryPage({
             ))}
           </tbody>
         </Table>
+      )}
+
+      {history.rows.length > 0 && (
+        <Pagination
+          total={history.rows.length}
+          page={page}
+          size={size}
+          hrefFor={({ page: nextPage, size: nextSize }) => hrefFor({ page: nextPage, size: nextSize })}
+        />
       )}
     </div>
   );
