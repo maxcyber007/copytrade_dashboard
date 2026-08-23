@@ -108,9 +108,16 @@ export async function reconcileAccount(accountId: string): Promise<AccountReconc
 /** Reconciles every connected account. One failure never stops the others. */
 export async function reconcileAllAccounts(): Promise<{ accounts: number; failed: number; closed: number }> {
   // ERROR accounts are included so a broker outage or a restart heals itself
-  // once the account is reachable again.
+  // once the account is reachable again. An account that never connected is
+  // not: there is no session to restore, and marking it ERROR here would
+  // overwrite the reason its connection attempt actually failed — which is the
+  // one thing the member and the logs need to see.
   const accounts = await prisma.tradingAccount.findMany({
-    where: { connectionStatus: { in: ["CONNECTED", "ERROR"] } },
+    where: {
+      connectionStatus: { in: ["CONNECTED", "ERROR"] },
+      providerAccountId: { not: null },
+      encryptedPassword: { not: null },
+    },
     select: { id: true },
   });
 

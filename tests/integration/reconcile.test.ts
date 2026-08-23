@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "@/lib/auth/password";
 import { encryptSecret } from "@/lib/crypto";
 import { getTradeProvider } from "@/providers/trading/factory";
-import { reconcileAccount, recomputeStrategyStats } from "@/services/reconcile.service";
+import { reconcileAccount, reconcileAllAccounts, recomputeStrategyStats } from "@/services/reconcile.service";
 
 /**
  * Reconciliation: what the broker says, versus what we stored.
@@ -189,6 +189,39 @@ describe("account reconciliation", () => {
     const refreshed = await prisma.tradingAccount.findUniqueOrThrow({ where: { id: ids.account } });
     expect(refreshed.connectionStatus).toBe("CONNECTED");
     expect(refreshed.lastError).toBeNull();
+  }, 60_000);
+});
+
+describe("the sweep", () => {
+  it("leaves an account that never connected alone, keeping the reason it failed", async () => {
+    if (!databaseAvailable) return;
+
+    // A connection attempt that failed before a provider session existed: the
+    // account is ERROR, carries the broker's own reason, and has no session.
+    const stranded = await prisma.tradingAccount.create({
+      data: {
+        userId: ids.user,
+        label: "Never connected",
+        broker: "Rtest Broker",
+        login: `98${suffix.slice(0, 6)}`,
+        server: "Rtest-Server",
+        platform: "MT5",
+        provider: "mock",
+        connectionStatus: "ERROR",
+        lastError: "MetaApi connection failed: broker refused the credentials",
+      },
+    });
+
+    await reconcileAllAccounts();
+
+    const refreshed = await prisma.tradingAccount.findUniqueOrThrow({ where: { id: stranded.id } });
+
+    // Sweeping it would replace that reason with "No stored provider session",
+    // which says nothing about why the connection failed — and that message is
+    // all the member and the logs have to go on.
+    expect(refreshed.lastError).toBe("MetaApi connection failed: broker refused the credentials");
+
+    await prisma.tradingAccount.delete({ where: { id: stranded.id } });
   }, 60_000);
 });
 
