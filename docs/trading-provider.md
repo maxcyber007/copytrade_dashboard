@@ -45,11 +45,24 @@ schema ties a strategy's `masterPlatform` to a member's `platform`.
 
 ## Implementations
 
-**Mock providers (Phase 6, default)** — an in-memory broker simulation covering both
-platforms, including MT4 ticket remapping on partial close and MT5 netting. It
-simulates latency, fills and rejections (`MARKET_CLOSED`, `INVALID_VOLUME`,
-`INSUFFICIENT_MARGIN`), so the whole copy path is testable without a live account or
-real money.
+**`MockTradingProvider` (default)** — an in-memory broker simulation covering both
+platforms. It is not a stub: it reproduces the behaviour that breaks naive copy
+implementations, and the unit tests assert each one.
+
+- MT4 keeps same-symbol orders as separate tickets, and a partial close closes the
+  original ticket and returns a **new** `remainderTicket` for what is left.
+- A netting MT5 account merges a same-symbol order into the open position and
+  returns the **same** ticket, so mapping by ticket alone would point two copies at
+  one position.
+- MT4 accounts report a coarser lot step than MT5 ones, so volume clamping is
+  exercised on both.
+- Orders are rejected with real error codes (`INVALID_SYMBOL`, `INVALID_VOLUME`,
+  `POSITION_NOT_FOUND`) rather than throwing, and a login ending in `0000` is
+  refused at connect so the failure path is testable.
+- Prices drift with the clock, so dashboards show movement without a live feed.
+
+No real money can move through it, which is what makes the whole system testable
+before a broker is involved.
 
 **`MetaApiProvider` (Phase 11)** — MetaApi serves both MT4 and MT5 accounts. It will
 be written against the official documentation as it stands at implementation time;

@@ -277,6 +277,130 @@ console.log("\nSignal provider application");
 }
 
 // ---------------------------------------------------------------------------
+console.log("\nTrading accounts");
+let accountId = null;
+{
+  const created = await request("POST", "/api/accounts", {
+    body: {
+      label: `Smoke MT5 ${rand}`,
+      platform: "MT5",
+      broker: "Smoke Broker",
+      login: `9${rand}`.slice(0, 12),
+      server: "Smoke-Live01",
+      accountType: "DEMO",
+      currency: "USD",
+      password: "SmokeAccount123",
+    },
+  });
+  check("member can add a trading account", created.status === 201, `got ${created.status}: ${created.text}`);
+  accountId = created.json?.data?.account?.id ?? null;
+  check("stored password never comes back", !/SmokeAccount123|encryptedPassword/.test(created.text), created.text);
+
+  const invalid = await request("POST", "/api/accounts", {
+    body: { label: "x", platform: "CTRADER", broker: "b", login: "1", server: "s", password: "p" },
+  });
+  check("unsupported platform is rejected", invalid.status === 400, `got ${invalid.status}`);
+
+  if (accountId) {
+    const connected = await request("POST", `/api/accounts/${accountId}/connect`);
+    check("account connects through the provider", connected.status === 200, `got ${connected.status}: ${connected.text}`);
+    check(
+      "broker limits are stored on connect",
+      Number(connected.json?.data?.account?.brokerLotStep ?? 0) > 0,
+      connected.text,
+    );
+
+    const synced = await request("POST", `/api/accounts/${accountId}/sync`);
+    check("account sync returns positions", synced.status === 200 && Array.isArray(synced.json?.data?.positions), synced.text);
+  } else {
+    skip("account connects through the provider", "no account id returned");
+    skip("broker limits are stored on connect", "no account id returned");
+    skip("account sync returns positions", "no account id returned");
+  }
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nStrategies and copy control");
+{
+  const strategies = await request("GET", "/api/strategies");
+  check("member can list strategies", strategies.status === 200, `got ${strategies.status}`);
+
+  const adminOnly = await request("POST", "/api/admin/strategies", { body: { code: "SMOKE-001", name: "Smoke" } });
+  check("member cannot create a platform strategy", adminOnly.status === 403, `got ${adminOnly.status}`);
+
+  const live = (strategies.json?.data?.strategies ?? []).find((s) => s.status === "ACTIVE");
+  if (live && accountId) {
+    const subscribed = await request("POST", "/api/copy/subscribe", {
+      body: {
+        strategyId: live.id,
+        accountId,
+        copySettings: { lotMode: "MULTIPLIER", multiplier: 2, minLot: 0.01, maxLot: 5 },
+      },
+    });
+    check("member can subscribe an account to a strategy", subscribed.status === 201, `got ${subscribed.status}: ${subscribed.text}`);
+    check("subscription starts idle, not copying", subscribed.json?.data?.subscription?.copyStatus === "IDLE", subscribed.text);
+
+    const subscriptionId = subscribed.json?.data?.subscription?.id;
+    if (subscriptionId) {
+      const started = await request("POST", "/api/copy/start", { body: { subscriptionId } });
+      check("copying starts on a connected account", started.json?.data?.subscription?.copyStatus === "COPYING", started.text);
+
+      const paused = await request("POST", "/api/copy/pause", { body: { subscriptionId } });
+      check("copying pauses", paused.json?.data?.subscription?.copyStatus === "PAUSED", paused.text);
+
+      const badSettings = await request("PUT", `/api/copy/${subscriptionId}/settings`, {
+        body: { lotMode: "FIXED", fixedLot: 0.1, minLot: 5, maxLot: 1 },
+      });
+      check("impossible lot bounds are rejected", badSettings.status === 400, `got ${badSettings.status}`);
+
+      await request("POST", "/api/copy/stop", { body: { subscriptionId } });
+      const removed = await request("DELETE", `/api/copy/${subscriptionId}`);
+      check("member can unsubscribe", removed.status === 200, `got ${removed.status}`);
+    } else {
+      skip("copy control", "no subscription id returned");
+    }
+  } else {
+    skip("member can subscribe an account to a strategy", "no ACTIVE strategy published on this server");
+  }
+
+  const foreign = await request("POST", "/api/copy/start", { body: { subscriptionId: "not-a-real-subscription" } });
+  check("copy control on someone else's subscription is not found", foreign.status === 404, `got ${foreign.status}`);
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nAdmin surfaces are closed to members");
+{
+  for (const path of ["/api/admin/dashboard", "/api/admin/members", "/api/admin/accounts", "/api/admin/copy-trades", "/api/admin/errors"]) {
+    const res = await request("GET", path);
+    check(`member cannot read ${path}`, res.status === 403, `got ${res.status}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nProvider publishing");
+{
+  const strategies = await request("GET", "/api/provider/strategies");
+  // A member who has only applied is not approved, so publishing is refused.
+  check(
+    "unapproved member cannot list provider strategies",
+    strategies.status === 403,
+    `got ${strategies.status}: ${strategies.text}`,
+  );
+
+  const created = await request("POST", "/api/provider/strategies", {
+    body: { code: `SMOKE-${rand}`.slice(0, 20).toUpperCase(), name: "Smoke provider strategy" },
+  });
+  check("unapproved member cannot publish a strategy", created.status === 403, `got ${created.status}`);
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nCleanup");
+if (accountId) {
+  const removed = await request("DELETE", `/api/accounts/${accountId}`);
+  check("member can remove their trading account", removed.status === 200, `got ${removed.status}`);
+}
+
+// ---------------------------------------------------------------------------
 console.log("\nLogout");
 {
   const loggedOut = await request("POST", "/api/auth/logout");

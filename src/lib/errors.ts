@@ -96,7 +96,24 @@ function defaultStatus(code: ErrorCodeValue): number {
       return 409;
     case ErrorCode.VALIDATION_ERROR:
     case ErrorCode.STALE_REQUEST:
+    case ErrorCode.PLATFORM_NOT_SUPPORTED:
       return 400;
+    // The request was understood but the broker refused it — not our failure.
+    case ErrorCode.INVALID_SYMBOL:
+    case ErrorCode.INVALID_VOLUME:
+    case ErrorCode.INVALID_STOPS:
+    case ErrorCode.INSUFFICIENT_MARGIN:
+    case ErrorCode.MARKET_CLOSED:
+    case ErrorCode.RISK_LIMIT_REACHED:
+      return 422;
+    case ErrorCode.POSITION_NOT_FOUND:
+      return 404;
+    // Upstream provider problems are gateway failures, not internal errors.
+    case ErrorCode.PLATFORM_CONNECTION_ERROR:
+    case ErrorCode.PROVIDER_ERROR:
+      return 502;
+    case ErrorCode.TIMEOUT:
+      return 504;
     case ErrorCode.ACCOUNT_LOCKED:
     case ErrorCode.RATE_LIMITED:
       return 429;

@@ -10,10 +10,11 @@ A member's platform is a property of their account, not a separate product: an M
 master can be copied to MT4 members and vice versa, with symbol mapping and lot
 rounding bridging the brokers.
 
-> **Status: Phase 1–2 complete** (project setup, database schema, authentication,
-> Docker) plus the signal provider marketplace (application, admin review,
-> per-strategy master credentials) and the marketing site. See
-> [Roadmap](#roadmap) for what each later phase adds.
+> **Status: Phases 1–6 complete** — setup, database, authentication, member and
+> admin dashboards, strategy management, the signal provider marketplace, and the
+> mock trading provider that makes all of it work end to end without a live
+> account. Next: the master trade event API and the copy engine (Phases 7–9).
+> See [Roadmap](#roadmap).
 
 ## Architecture
 
@@ -156,6 +157,17 @@ Implemented today:
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET/POST | `/api/accounts` | List / add MT4 and MT5 accounts |
+| GET/DELETE | `/api/accounts/:id` | Account detail with live positions / remove |
+| POST | `/api/accounts/:id/connect` `…/disconnect` `…/sync` | Provider session and metric refresh |
+| GET | `/api/strategies`, `/api/strategies/:id` | Strategies a member may subscribe to |
+| POST | `/api/copy/subscribe`, `/start`, `/pause`, `/stop` | Subscription and copy control |
+| PUT/DELETE | `/api/copy/:id/settings`, `/api/copy/:id` | Change lot and risk settings / unsubscribe |
+| GET | `/api/trades` | Copy history |
+| GET/POST | `/api/provider/strategies` | A provider's own strategies |
+| POST/DELETE | `/api/provider/strategies/:id/keys`, `/api/provider/keys/:id` | Issue / revoke master EA credentials |
+| GET/POST/PUT/DELETE | `/api/admin/strategies[/:id][/status]` | Admin strategy management |
+| GET | `/api/admin/dashboard`, `/members`, `/accounts`, `/copy-trades`, `/errors` | Admin surfaces |
 | POST | `/api/auth/register` | Create account, start session |
 | POST | `/api/auth/login` | Authenticate, start session |
 | POST | `/api/auth/logout` | Revoke session |
@@ -231,10 +243,10 @@ integration test of the full master-trade → member-copy path.
 |---|---|---|
 | 1 | Project setup, Tailwind, Docker, authentication | done |
 | 2 | Prisma schema + migration | done |
-| 3 | Member dashboard | next |
-| 4 | Admin dashboard | planned |
-| 5 | Strategy management | planned |
-| 6 | Mock MT4/MT5 providers | planned |
+| 3 | Member dashboard, trading accounts | done |
+| 4 | Admin dashboard, members, accounts, errors | done |
+| 5 | Strategy management (admin + provider) | done |
+| 6 | Mock MT4/MT5 provider | done |
 | 7 | Master trade event API (HMAC) | planned |
 | 8 | Copy engine + worker | planned |
 | 9 | Risk engine | planned |
