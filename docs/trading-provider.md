@@ -120,7 +120,7 @@ Four details decide whether a copy is correct, and each is easy to get wrong:
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `METAAPI_TOKEN` | — | required when `TRADING_PROVIDER=metaapi`; the app refuses to start without it |
-| `METAAPI_REGION` | `new-york` | one of the regions MetaApi lists for your account |
+| `METAAPI_REGION` | `new-york` | region for accounts **this platform creates**. An account that already exists in MetaApi keeps its own region and is reached there — the client is deliberately not pinned to one region, because two members' accounts can live in different ones |
 | `METAAPI_ACCOUNT_TYPE` | `cloud-g2` | MetaApi's own default — "faster and cheaper" than `cloud-g1` |
 | `METAAPI_RELIABILITY` | `regular` | `high` is a **paid** option billed at two resource slots; asking for it on a subscription that does not include it fails account creation |
 

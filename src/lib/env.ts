@@ -19,6 +19,7 @@ const schema = z.object({
   // One provider serves both MT4 and MT5; the platform lives on the account.
   TRADING_PROVIDER: z.enum(["mock", "metaapi"]).default("mock"),
   METAAPI_TOKEN: z.string().optional(),
+  /** Region for accounts this platform creates; existing accounts keep theirs. */
   METAAPI_REGION: z.string().optional(),
   /** `cloud-g2` is MetaApi's documented default: faster and cheaper than G1. */
   METAAPI_ACCOUNT_TYPE: z.enum(["cloud-g2", "cloud-g1"]).default("cloud-g2"),

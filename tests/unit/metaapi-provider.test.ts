@@ -42,6 +42,7 @@ type FakeState = {
   /** Stands in for a token without account provisioning access. */
   refuseProvisioning?: Error & { status?: number };
   existingAccounts: unknown[];
+  clientOptions?: Record<string, unknown>;
   positions: MetaApiPosition[];
   /** Ticket the fake reports for a partial close, standing in for MT4. */
   partialCloseRemainder?: string;
@@ -177,7 +178,9 @@ function makeSdk(overrides: Partial<FakeState> = {}) {
     constructor(
       readonly token: string,
       readonly opts?: Record<string, unknown>,
-    ) {}
+    ) {
+      state.clientOptions = opts;
+    }
 
     metatraderAccountApi = {
       async getAccount() {
@@ -582,5 +585,31 @@ describe("a broker that refuses the credentials", () => {
     expect(isBrokerAuthFailure(Object.assign(new Error("nope"), { status: 400, details: { code: "E_SRV_NOT_FOUND" } }))).toBe(
       false,
     );
+  });
+});
+
+describe("regions", () => {
+  it("does not pin the client to one region", async () => {
+    const sdk = makeSdk();
+    await makeProvider(sdk).getAccountInfo("meta-account-1");
+
+    // Pinning the client makes every account it touches have to live in that
+    // region: an account provisioned elsewhere answers "is not on specified
+    // region". Accounts carry their own region, and two members' can differ.
+    expect(sdk.state.clientOptions?.region).toBeUndefined();
+  });
+
+  it("still creates new accounts in the configured region", async () => {
+    const sdk = makeSdk();
+    await makeProvider(sdk).connectAccount({
+      accountId: "acc-1",
+      platform: "MT5",
+      login: "123456",
+      server: "Fake-Server",
+      broker: "Fake Broker",
+      password: "brokerpassword",
+    });
+
+    expect(sdk.state.createdAccounts[0]).toMatchObject({ region: "london" });
   });
 });

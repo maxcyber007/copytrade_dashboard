@@ -145,6 +145,7 @@ const STRING_CODE_MAP: Record<string, string> = {
 
 export type MetaApiProviderConfig = {
   token: string;
+  /** Region for accounts this platform creates. Existing accounts keep theirs. */
   region: string;
   /** How long to wait for the terminal to reach the broker. */
   connectTimeoutSeconds?: number;
@@ -207,7 +208,12 @@ export class MetaApiProvider implements ITradeProvider {
     // One client per process: it owns the websocket pool, and a second one
     // would open a second set of sockets to the same region.
     globalForMetaApi.metaApiClient ??= this.loadSdk()
-      .then((MetaApi) => new MetaApi(this.config.token, { region: this.config.region }))
+      // No `region` option: it pins the whole client to one region, and every
+      // account it then touches must live there. Accounts belong to whatever
+      // region they were provisioned in — two members can differ — so the
+      // client is left to route per account, and the configured region is used
+      // only when creating one.
+      .then((MetaApi) => new MetaApi(this.config.token))
       .catch((error) => {
         // A failed construction must not be cached, or every later call fails
         // with the first error even after the cause is fixed.
