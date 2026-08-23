@@ -126,6 +126,18 @@ export type AccountTrade = {
   reason?: CloseReason;
 };
 
+/**
+ * A page of an account's history, with the broker's own caveat attached.
+ *
+ * `synchronizing` means the broker has not finished loading this account's
+ * history yet, so what came back is incomplete. Showing it as a finished
+ * history would tell a member they have no trades when they do.
+ */
+export type AccountTradeHistory = {
+  trades: AccountTrade[];
+  synchronizing: boolean;
+};
+
 export type SymbolSpec = {
   symbol: string;
   minLot: number;

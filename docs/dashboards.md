@@ -115,6 +115,9 @@ misrepresent that strategy's results to everyone else considering it.
 
 When the broker cannot be reached the copied positions are still listed, above a
 line saying so. A short history that looks complete is worse than a stated gap.
+The same applies to the broker's `synchronizing` flag: while it is loading an
+account's history the list is partial, and the page says so rather than letting
+an empty list read as "you have never traded".
 
 Position results (close price, realised profit, close reason) are also stored on
 `PositionMapping` as positions end — filled when this platform closes one, when

@@ -2,6 +2,7 @@ import type { ITradeProvider } from "./ITradeProvider";
 import type {
   AccountInfo,
   AccountTrade,
+  AccountTradeHistory,
   ClosedPositionResult,
   CloseReason,
   ClosePositionRequest,
@@ -524,18 +525,35 @@ export class MetaApiProvider implements ITradeProvider {
   async getTradeHistory(
     providerAccountId: string,
     range: { from: Date; to: Date; limit?: number },
-  ): Promise<AccountTrade[]> {
+  ): Promise<AccountTradeHistory> {
     const connection = await this.connection(providerAccountId);
 
     let deals: MetaApiDeal[];
+    let synchronizing = false;
+
     try {
       const response = await connection.getDealsByTimeRange(range.from, range.to, 0, range.limit ?? 1000);
       deals = response?.deals ?? [];
+      // The broker is still loading this account's history: what came back is
+      // incomplete, and an empty list here does not mean the member has never
+      // traded.
+      synchronizing = response?.synchronizing === true;
     } catch (error) {
       throw this.connectionError(error, providerAccountId);
     }
 
-    return groupDealsIntoTrades(deals, range.limit ?? 500);
+    const trades = groupDealsIntoTrades(deals, range.limit ?? 500);
+
+    logEvent({
+      event: "METAAPI_TRADE_HISTORY_READ",
+      providerAccountId,
+      deals: deals.length,
+      trades: trades.length,
+      synchronizing,
+      from: range.from.toISOString(),
+    });
+
+    return { trades, synchronizing };
   }
 
   // ------------------------------------------------------------------ trading

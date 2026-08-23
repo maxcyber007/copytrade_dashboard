@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { logErrorEvent } from "@/lib/logger";
+import { logErrorEvent, logEvent } from "@/lib/logger";
 import { getTradeProvider } from "@/providers/trading/factory";
 import { ensureProviderSession } from "./account.service";
 import type { AccountTrade } from "@/types/trading";
@@ -18,6 +18,8 @@ export type TradeHistory = {
   to: Date;
   /** Null when the broker could be reached; a reason when it could not. */
   brokerUnavailable: string | null;
+  /** The broker is still loading this account's history: the list is partial. */
+  synchronizing: boolean;
   totals: { profit: number; wins: number; losses: number; volume: number };
 };
 
@@ -79,11 +81,14 @@ export async function getAccountTradeHistory(
 
   let brokerTrades: AccountTrade[] = [];
   let brokerUnavailable: string | null = null;
+  let synchronizing = false;
 
   if (account.connectionStatus === "CONNECTED" && account.providerAccountId) {
     try {
       const providerAccountId = await ensureProviderSession(accountId);
-      brokerTrades = await getTradeProvider().getTradeHistory(providerAccountId, { from, to });
+      const history = await getTradeProvider().getTradeHistory(providerAccountId, { from, to });
+      brokerTrades = history.trades;
+      synchronizing = history.synchronizing;
     } catch (error) {
       brokerUnavailable = error instanceof Error ? error.message : "The broker could not be reached";
       logErrorEvent({ event: "TRADE_HISTORY_FETCH_FAILED", accountId, reason: brokerUnavailable });
@@ -123,6 +128,16 @@ export async function getAccountTradeHistory(
 
   // Still-open positions sort to the top: they are the ones being watched.
   const when = (row: TradeHistoryRow) => row.closedAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  logEvent({
+    event: "TRADE_HISTORY_LOADED",
+    accountId,
+    days,
+    brokerTrades: brokerTrades.length,
+    copiedPositions: mappings.length,
+    synchronizing,
+    brokerReached: brokerUnavailable === null,
+  });
+
   rows.sort((a, b) => when(b) - when(a));
 
   const closed = rows.filter((row) => row.closedAt !== null);
@@ -132,6 +147,7 @@ export async function getAccountTradeHistory(
     from,
     to,
     brokerUnavailable,
+    synchronizing,
     totals: {
       profit: Number(closed.reduce((total, row) => total + row.profit, 0).toFixed(2)),
       wins: closed.filter((row) => row.profit > 0).length,

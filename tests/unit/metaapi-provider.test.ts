@@ -44,6 +44,7 @@ type FakeState = {
   existingAccounts: unknown[];
   deals: Record<string, unknown[]>;
   dealsError?: Error;
+  synchronizing?: boolean;
   clientOptions?: Record<string, unknown>;
   positions: MetaApiPosition[];
   /** Ticket the fake reports for a partial close, standing in for MT4. */
@@ -137,7 +138,10 @@ function makeSdk(overrides: Partial<FakeState> = {}) {
     },
     async getDealsByTimeRange() {
       if (state.dealsError) throw state.dealsError;
-      return { deals: Object.values(state.deals).flat() as never[], synchronizing: false };
+      return {
+        deals: Object.values(state.deals).flat() as never[],
+        synchronizing: state.synchronizing === true,
+      };
     },
     async createMarketBuyOrder(
       symbol: string,
@@ -710,7 +714,7 @@ describe("the account's own trade history", () => {
       ],
     };
 
-    const trades = await makeProvider(sdk).getTradeHistory("meta-account-1", {
+    const { trades } = await makeProvider(sdk).getTradeHistory("meta-account-1", {
       from: at("2026-08-01T00:00:00Z"),
       to: at("2026-08-31T00:00:00Z"),
     });
@@ -737,7 +741,9 @@ describe("the account's own trade history", () => {
       ],
     };
 
-    const [trade] = await makeProvider(sdk).getTradeHistory("meta-account-1", {
+    const {
+      trades: [trade],
+    } = await makeProvider(sdk).getTradeHistory("meta-account-1", {
       from: at("2026-08-22T00:00:00Z"),
       to: at("2026-08-24T00:00:00Z"),
     });
@@ -745,5 +751,21 @@ describe("the account's own trade history", () => {
     // Closed by a sell, so it was held long.
     expect(trade!.orderType).toBe("BUY");
     expect(trade!.openPrice).toBeUndefined();
+  });
+});
+
+describe("a history the broker has not finished loading", () => {
+  it("passes the broker's own caveat on instead of swallowing it", async () => {
+    const sdk = makeSdk({ synchronizing: true });
+
+    const history = await makeProvider(sdk).getTradeHistory("meta-account-1", {
+      from: new Date("2026-08-01T00:00:00Z"),
+      to: new Date("2026-08-31T00:00:00Z"),
+    });
+
+    // An empty list while the broker is still syncing does not mean the member
+    // has never traded, and must not be shown as a finished history.
+    expect(history.trades).toEqual([]);
+    expect(history.synchronizing).toBe(true);
   });
 });

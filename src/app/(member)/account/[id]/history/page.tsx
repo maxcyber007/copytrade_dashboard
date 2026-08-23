@@ -92,6 +92,18 @@ export default async function AccountHistoryPage({
         </div>
       )}
 
+      {history.synchronizing && (
+        // An empty list while the broker is still loading history would
+        // otherwise read as "you have never traded".
+        <div
+          className="rounded-xl border px-4 py-3 text-sm"
+          style={{ borderColor: "var(--gold-line)" }}
+        >
+          The broker is still loading this account&apos;s history, so this list may be incomplete. It fills in
+          within a few minutes of connecting — reload then.
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-4">
         <Stat label="Trades" value={String(history.rows.length)} note={`over ${days} days`} />
         <Stat label="Closed volume" value={`${formatLot(history.totals.volume)} lots`} />

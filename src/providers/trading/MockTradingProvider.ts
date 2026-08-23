@@ -1,7 +1,7 @@
 import type { ITradeProvider } from "./ITradeProvider";
 import type {
   AccountInfo,
-  AccountTrade,
+  AccountTradeHistory,
   ClosedPositionResult,
   CloseReason,
   ClosePositionRequest,
@@ -308,10 +308,10 @@ export class MockTradingProvider implements ITradeProvider {
   async getTradeHistory(
     providerAccountId: string,
     range: { from: Date; to: Date; limit?: number },
-  ): Promise<AccountTrade[]> {
+  ): Promise<AccountTradeHistory> {
     const account = this.require(providerAccountId);
 
-    return [...account.closes.values()]
+    const trades = [...account.closes.values()]
       .filter((close) => close.closedAt >= range.from && close.closedAt <= range.to)
       .sort((a, b) => b.closedAt.getTime() - a.closedAt.getTime())
       .slice(0, range.limit ?? 500)
@@ -327,6 +327,8 @@ export class MockTradingProvider implements ITradeProvider {
         closedAt: close.closedAt,
         reason: close.reason,
       }));
+
+    return { trades, synchronizing: false };
   }
 
   // -- helpers ---------------------------------------------------------------

@@ -1,6 +1,6 @@
 import type {
   AccountInfo,
-  AccountTrade,
+  AccountTradeHistory,
   ClosedPositionResult,
   ClosePositionRequest,
   ConnectAccountInput,
@@ -53,7 +53,10 @@ export interface ITradeProvider {
    * broker. Balance operations — deposits, withdrawals, credits — are not
    * trades and are left out.
    */
-  getTradeHistory(providerAccountId: string, range: { from: Date; to: Date; limit?: number }): Promise<AccountTrade[]>;
+  getTradeHistory(
+    providerAccountId: string,
+    range: { from: Date; to: Date; limit?: number },
+  ): Promise<AccountTradeHistory>;
 
   openPosition(providerAccountId: string, request: OpenPositionRequest): Promise<OrderResult>;
   modifyPosition(providerAccountId: string, request: ModifyPositionRequest): Promise<OrderResult>;
