@@ -49,6 +49,7 @@ export function SubscribeDialog({
             riskPercent: Number(form.get("riskPercent") ?? 1),
             minLot: Number(form.get("minLot") ?? 0.01),
             maxLot: Number(form.get("maxLot") ?? 10),
+            allowMinLotRounding: form.get("allowMinLotRounding") === "on",
             maxOpenTrades: Number(form.get("maxOpenTrades") ?? 20),
             copyBuy: form.get("copyBuy") === "on",
             copySell: form.get("copySell") === "on",
@@ -177,6 +178,18 @@ export function SubscribeDialog({
               <Input name="minLot" type="number" step="0.01" min="0.01" defaultValue="0.01" label="Minimum lot" />
               <Input name="maxLot" type="number" step="0.01" min="0.01" defaultValue="10" label="Maximum lot" />
             </div>
+
+            <label className="flex items-start gap-3 rounded-lg p-3 text-sm" style={{ background: "var(--bg)" }}>
+              <input type="checkbox" name="allowMinLotRounding" className="mt-1" />
+              <span>
+                <span className="block font-medium">Round up to the broker minimum</span>
+                <span className="block text-xs text-muted">
+                  When your settings size a trade below the smallest lot your broker accepts, take it
+                  at that minimum instead of skipping it. This means more exposure than you
+                  configured, so it is off by default.
+                </span>
+              </span>
+            </label>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Input name="maxDailyLoss" type="number" min="0" defaultValue="0" label="Max daily loss (0 = off)" />

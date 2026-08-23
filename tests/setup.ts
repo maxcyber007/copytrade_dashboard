@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 /**
  * Deterministic test environment. Real secrets never come from the repository —
@@ -6,6 +7,16 @@ import { randomBytes } from "node:crypto";
  */
 const env = process.env as Record<string, string | undefined>;
 env.NODE_ENV ??= "test";
+// Integration tests use the development database when .env provides one; unit
+// tests only need the variable to satisfy env validation.
+if (!env.DATABASE_URL) {
+  try {
+    const dotenv = readFileSync(new URL("../.env", import.meta.url), "utf8");
+    env.DATABASE_URL = dotenv.match(/^DATABASE_URL=(.*)$/m)?.[1]?.trim();
+  } catch {
+    // no .env — fall through to the placeholder below
+  }
+}
 env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/test?schema=public";
 env.REDIS_URL ??= "redis://localhost:6379";
 env.AUTH_SECRET ??= randomBytes(48).toString("base64");

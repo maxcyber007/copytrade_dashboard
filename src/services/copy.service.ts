@@ -6,6 +6,7 @@ import { AppError, ErrorCode } from "@/lib/errors";
 import type { SubscribeInput } from "@/lib/validation/copy";
 import { copySettingsSchema, riskProfileSchema } from "@/lib/validation/copy";
 import { AuditAction, recordAudit } from "./audit.service";
+import { assertWithinPlanLimits } from "./subscription.service";
 import type { RequestMeta } from "./auth.service";
 
 export const listSubscriptions = (userId: string) => subscriptionRepository.listForUser(userId);
@@ -28,6 +29,8 @@ export async function subscribe(userId: string, input: SubscribeInput, meta: Req
   if (await subscriptionRepository.findByAccountAndStrategy(input.accountId, input.strategyId)) {
     throw new AppError(ErrorCode.CONFLICT, "This account already follows that strategy");
   }
+
+  await assertWithinPlanLimits(userId, "STRATEGY");
 
   const settings = copySettingsSchema.parse(input.copySettings ?? {});
   const risk = riskProfileSchema.parse(input.riskProfile ?? {});

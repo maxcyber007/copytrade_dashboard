@@ -10,6 +10,8 @@ export const copySettingsSchema = z
 
     minLot: z.coerce.number().min(0.01).max(100).default(0.01),
     maxLot: z.coerce.number().min(0.01).max(100).default(10),
+    /** Off by default: taking more size than configured must be opted into. */
+    allowMinLotRounding: z.boolean().default(false),
 
     copyBuy: z.boolean().default(true),
     copySell: z.boolean().default(true),

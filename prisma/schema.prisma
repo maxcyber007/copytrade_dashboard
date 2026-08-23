@@ -471,6 +471,11 @@ model CopySettings {
   minLot  Decimal @default(0.01) @db.Decimal(10, 2)
   lotStep Decimal @default(0.01) @db.Decimal(10, 2)
 
+  /// When the calculated volume falls below the broker's smallest tradable
+  /// size, round up to it (more exposure than configured) or skip the trade.
+  /// Defaults to skipping: a member's risk settings are not ours to exceed.
+  allowMinLotRounding Boolean @default(false)
+
   copyBuy           Boolean @default(true)
   copySell          Boolean @default(true)
   copySl            Boolean @default(true)

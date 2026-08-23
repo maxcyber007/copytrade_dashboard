@@ -10,6 +10,7 @@ const MEMBER_NAV = [
   { href: "/strategies", label: "Strategies" },
   { href: "/history", label: "Copy History" },
   { href: "/performance", label: "Performance" },
+  { href: "/billing", label: "Plan & Billing" },
 ];
 
 const PROVIDER_NAV = [

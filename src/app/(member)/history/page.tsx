@@ -4,6 +4,7 @@ import { Table, Td, Th } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, toNumber } from "@/lib/utils";
+import { LiveUpdates } from "@/components/live/live-updates";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +14,14 @@ export default async function HistoryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Copy history</h1>
-        <p className="mt-1 text-sm text-muted">
-          Every copy attempt, successful or not, with the lots and prices on both sides.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Copy history</h1>
+          <p className="mt-1 text-sm text-muted">
+            Every copy attempt, successful or not, with the lots and prices on both sides.
+          </p>
+        </div>
+        <LiveUpdates showToasts={false} />
       </div>
 
       {trades.length === 0 ? (

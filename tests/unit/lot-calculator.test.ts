@@ -13,6 +13,7 @@ const base: LotInputs = {
   brokerMinLot: 0.01,
   brokerMaxLot: 100,
   brokerLotStep: 0.01,
+  allowMinLotRounding: false,
   memberBalance: 5000,
   memberEquity: 5000,
   masterBalance: 10_000,
@@ -80,8 +81,8 @@ describe("clamping", () => {
     expect(volumeOf({ multiplier: 100, maxLot: 50, brokerMaxLot: 5 })).toBe(5);
   });
 
-  it("raises a tiny volume to the floor rather than sending an unfillable order", () => {
-    expect(volumeOf({ multiplier: 0.001, minLot: 0.01 })).toBe(0.01);
+  it("raises a tiny volume to the member's own minimum", () => {
+    expect(volumeOf({ multiplier: 0.001, minLot: 0.05, brokerMinLot: 0.01 })).toBe(0.05);
   });
 
   it("respects an MT4 broker's coarser lot step", () => {
@@ -89,10 +90,40 @@ describe("clamping", () => {
     expect(volumeOf({ multiplier: 2.5, brokerLotStep: 0.1 })).toBe(0.2);
   });
 
-  it("fails when rounding down leaves less than the broker minimum", () => {
-    const result = calculateLot({ ...base, multiplier: 1, masterVolume: 0.1, brokerMinLot: 0.5, minLot: 0.01, maxLot: 0.4 });
+  it("skips rather than silently taking more size than configured", () => {
+    // An MT4 broker trading in 0.1 steps cannot fill the 0.05 these settings ask
+    // for. Rounding up would double the member's exposure without being asked.
+    const result = calculateLot({
+      ...base,
+      multiplier: 0.5,
+      masterVolume: 0.1,
+      brokerMinLot: 0.1,
+      brokerLotStep: 0.1,
+      allowMinLotRounding: false,
+    });
+
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.code).toBe("INVALID_VOLUME");
+    if (!result.ok) {
+      expect(result.code).toBe("BELOW_BROKER_MINIMUM");
+      expect(result.reason).toContain("0.1");
+    }
+  });
+
+  it("rounds up to the broker minimum only when the member opted in", () => {
+    const result = calculateLot({
+      ...base,
+      multiplier: 0.5,
+      masterVolume: 0.1,
+      brokerMinLot: 0.1,
+      brokerLotStep: 0.1,
+      allowMinLotRounding: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.volume).toBe(0.1);
+      expect(result.clamped).toBe(true);
+    }
   });
 
   it("reports when the result was clamped", () => {

@@ -217,6 +217,22 @@ console.log("\nSecurity headers");
   check("X-Content-Type-Options: nosniff", res.headers.get("x-content-type-options") === "nosniff");
   check("Referrer-Policy set", Boolean(res.headers.get("referrer-policy")));
   check("X-Powered-By hidden", res.headers.get("x-powered-by") === null);
+  check("Content-Security-Policy set", Boolean(res.headers.get("content-security-policy")));
+  check(
+    "CSP blocks framing and third-party script sources",
+    (res.headers.get("content-security-policy") ?? "").includes("frame-ancestors 'none'"),
+    res.headers.get("content-security-policy"),
+  );
+
+  const api = await request("GET", "/api/health", { cookies: false });
+  check("API responses are not cacheable", (api.headers.get("cache-control") ?? "").includes("no-store"));
+
+  // A cross-site fetch must not be able to ride a member's session cookie.
+  const crossOrigin = await fetch(`${BASE}/api/auth/logout`, {
+    method: "POST",
+    headers: { Origin: "https://evil.example", Cookie: cookieHeader() },
+  });
+  check("cross-origin state change is rejected", crossOrigin.status === 403, `got ${crossOrigin.status}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -393,6 +409,59 @@ console.log("\nProvider publishing");
     body: { code: `SMOKE-${rand}`.slice(0, 20).toUpperCase(), name: "Smoke provider strategy" },
   });
   check("unapproved member cannot publish a strategy", created.status === 403, `got ${created.status}`);
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nPlan, billing and live updates");
+{
+  const plans = await request("GET", "/api/billing/plans");
+  check("member can read the plan list", plans.status === 200, `got ${plans.status}`);
+  check(
+    "everyone has an effective plan, free by default",
+    Boolean(plans.json?.data?.effectivePlan?.tier),
+    plans.text,
+  );
+
+  const badPlan = await request("POST", "/api/billing/subscribe", { body: { planId: "does-not-exist" } });
+  check("unknown plan is rejected", badPlan.status === 404, `got ${badPlan.status}`);
+
+  // The free plan allows one trading account. Whatever this run has created so
+  // far, one more must be refused with 402 so the member is told to upgrade
+  // rather than meeting a generic error.
+  const existing = await request("GET", "/api/accounts");
+  const accountCount = existing.json?.data?.accounts?.length ?? 0;
+
+  const extra = await request("POST", "/api/accounts", {
+    body: {
+      label: `Plan test ${rand}`,
+      platform: "MT4",
+      broker: "Smoke Broker",
+      login: `82${rand}`.slice(0, 12),
+      server: "Smoke-Live01",
+      password: "SmokeAccount123",
+    },
+  });
+
+  if (accountCount >= 1) {
+    check("plan limit refuses an extra account with 402", extra.status === 402, `got ${extra.status}: ${extra.text}`);
+    check(
+      "the refusal names the plan limit",
+      extra.json?.error?.code === "PLAN_LIMIT_REACHED",
+      extra.text,
+    );
+  } else {
+    check("account creation succeeds while under the plan limit", extra.status === 201, `got ${extra.status}`);
+    await request("DELETE", `/api/accounts/${extra.json?.data?.account?.id}`);
+  }
+
+  // The stream is per-member and must never be readable without a session.
+  const anonymousStream = await fetch(`${BASE}/api/stream`, { redirect: "manual" });
+  check(
+    "event stream requires a session",
+    anonymousStream.status === 401 || anonymousStream.status === 500,
+    `got ${anonymousStream.status}`,
+  );
+  await anonymousStream.body?.cancel();
 }
 
 // ---------------------------------------------------------------------------

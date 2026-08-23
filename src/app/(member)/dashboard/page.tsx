@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Table, Td, Th } from "@/components/ui/table";
 import { formatCurrency, formatPercent, toNumber } from "@/lib/utils";
+import { LiveUpdates } from "@/components/live/live-updates";
 
 export const dynamic = "force-dynamic";
 
@@ -174,9 +175,13 @@ export default async function DashboardPage() {
 
 function Header({ email }: { email: string }) {
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-      <p className="text-sm text-muted">Signed in as {email}</p>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted">Signed in as {email}</p>
+      </div>
+      {/* Copies land on the account without a page reload. */}
+      <LiveUpdates />
     </div>
   );
 }

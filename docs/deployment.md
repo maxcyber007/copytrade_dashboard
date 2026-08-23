@@ -31,6 +31,37 @@ with HSTS enabled.
 Nginx passes `X-Forwarded-For`, which is what rate limiting and audit logging use as
 the client IP, and disables buffering on `/api/` so server-sent events stream.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+
+1. `npm run check:secrets` — before anything else, so a leak fails fast
+2. `prisma migrate deploy` against a real PostgreSQL service
+3. typecheck, unit and integration tests, production build
+4. a build of both Docker targets (`web` and `worker`), so a broken Dockerfile
+   is caught by CI rather than by a deploy
+
+The workflow's environment values are CI-only dummies. Production secrets belong
+in the deployment environment and never in a workflow file.
+
+## Backups
+
+```bash
+./scripts/backup-db.sh /var/backups/copytrade
+```
+
+Writes a compressed, timestamped dump from the `postgres` container, verifies the
+archive can be read back (a dump that cannot be restored is not a backup), and
+prunes anything older than `RETENTION_DAYS` (default 14). For cron:
+
+```
+0 3 * * *  /opt/copytrade/scripts/backup-db.sh /var/backups/copytrade
+```
+
+The restore command is printed after every run. **Test a restore before you need
+one** — and keep `ENCRYPTION_KEY` backed up separately: without it the stored
+trading credentials in a restored dump cannot be decrypted.
+
 ## Production checklist
 
 - [ ] `NODE_ENV=production` and `APP_URL` set to the public HTTPS origin
@@ -42,6 +73,10 @@ the client IP, and disables buffering on `/api/` so server-sent events stream.
 - [ ] `/api/health` wired to the uptime monitor (503 = degraded)
 - [ ] Log shipping configured; confirm no secret appears in the stream
 - [ ] Master EA points at the HTTPS endpoint with the production API key
+- [ ] `ENCRYPTION_KEY` backed up separately from the database
+- [ ] Backups scheduled via `scripts/backup-db.sh`, and a restore rehearsed
+- [ ] `TRADING_PROVIDER` left on `mock` until the MetaApi adapter is written and
+      verified — it throws on every method today, by design
 
 ## Scaling
 

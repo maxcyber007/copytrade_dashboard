@@ -23,6 +23,34 @@ safety over convenience.
 - IDOR protection: every account/subscription query filters by the session user's id.
   Ownership is a `WHERE` clause, not a client-supplied flag.
 
+## Browser-facing hardening
+
+- A Content Security Policy restricts every source to the origin:
+  `frame-ancestors 'none'`, `object-src 'none'`, `form-action 'self'`,
+  `base-uri 'self'`, and no third-party script, font, image or connection.
+  Next injects inline bootstrap scripts and styles, so those remain permitted;
+  `unsafe-eval` is development-only.
+- HSTS with preload, `Cross-Origin-Opener-Policy: same-origin`, and a
+  `Permissions-Policy` that turns off camera, microphone, geolocation and
+  payment.
+- Every `/api/*` response is `no-store`, so account data is never held by a
+  proxy or the browser cache.
+- **CSRF has two layers.** Session cookies are `SameSite=Lax`, which blocks
+  cross-site form posts; on top of that, any POST/PUT/PATCH/DELETE whose
+  `Origin` does not match the host is rejected with 403. `/api/master/events`
+  is exempt because a master EA is a machine client with no browser origin —
+  it is protected by its HMAC signature instead.
+
+## Secret scanning
+
+`npm run check:secrets` fails the build if a tracked file contains a private key
+block, a cloud or gateway token, a JWT, or a secret-shaped assignment with a real
+value — and if a file that must never be tracked (`.env`, `*.pem`, keys) is.
+It runs in CI before anything else. Values that are clearly not secrets (code
+reading a variable, `${{ }}` interpolation, `ci-`/`test-`/`example-` prefixes)
+are excluded by value shape rather than by allowlisting whole files, so a real
+secret in one of those files is still caught.
+
 ## Input handling
 
 - Every request body is parsed with Zod before reaching a service.

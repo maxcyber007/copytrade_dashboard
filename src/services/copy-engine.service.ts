@@ -11,6 +11,7 @@ import { evaluateRisk } from "./risk/risk-engine";
 import { resolveMemberSymbol } from "./symbol-mapping.service";
 import { AuditAction, recordAudit } from "./audit.service";
 import { ensureProviderSession } from "./account.service";
+import { publishUserEvent } from "@/lib/events";
 
 /** Contract sizes used for risk-percent sizing when the broker does not report one. */
 const CONTRACT_SIZES: Record<string, number> = {
@@ -121,7 +122,7 @@ type MemberContext = {
   provider: ITradeProvider;
   /** Live provider session for this account in *this* process. */
   providerAccountId: string;
-  event: TradeEvent & { strategy: { id: string }; masterTrade: { id: string } | null };
+  event: TradeEvent & { strategy: { id: string; name: string }; masterTrade: { id: string } | null };
   subscription: {
     id: string;
     accountId: string;
@@ -233,7 +234,15 @@ async function openForMember(
   // account, the previous attempt did land and must not be sent again.
   const existing = positions.find((position) => position.comment === refs.copyTradeId);
   if (existing) {
-    await recordFill(refs.copyTradeId, { executed: true, ticket: existing.ticket, price: existing.openPrice, volume: existing.volume, raw: { recovered: true } }, existing.volume, subscription, event, refs.memberSymbol);
+    await recordFill(
+      refs.copyTradeId,
+      { executed: true, ticket: existing.ticket, price: existing.openPrice, volume: existing.volume, raw: { recovered: true } },
+      existing.volume,
+      subscription,
+      event,
+      refs.memberSymbol,
+      event.strategy.name,
+    );
     logEvent({ event: "COPY_RECOVERED_EXISTING_ORDER", copyTradeId: refs.copyTradeId, ticket: existing.ticket });
     return "SUCCESS";
   }
@@ -257,6 +266,7 @@ async function openForMember(
     brokerMinLot: Math.max(toNumber(account.brokerMinLot), spec.minLot),
     brokerMaxLot: Math.min(toNumber(account.brokerMaxLot), spec.maxLot),
     brokerLotStep: Math.max(toNumber(account.brokerLotStep), spec.lotStep),
+    allowMinLotRounding: settings.allowMinLotRounding,
     memberBalance: toNumber(account.balance),
     memberEquity: toNumber(account.equity),
     masterBalance: event.masterBalance ? toNumber(event.masterBalance) : null,
@@ -335,10 +345,20 @@ async function openForMember(
       resourceId: refs.copyTradeId,
       metadata: { errorCode: result.errorCode, symbol: refs.memberSymbol },
     });
+
+    await publishUserEvent(subscription.userId, {
+      type: "COPY_TRADE",
+      status: "FAILED",
+      symbol: refs.memberSymbol,
+      volume: lot.volume,
+      strategy: event.strategy.name,
+      at: new Date().toISOString(),
+    });
+
     return "FAILED";
   }
 
-  await recordFill(refs.copyTradeId, result, lot.volume, subscription, event, refs.memberSymbol);
+  await recordFill(refs.copyTradeId, result, lot.volume, subscription, event, refs.memberSymbol, event.strategy.name);
   return "SUCCESS";
 }
 
@@ -457,6 +477,7 @@ async function recordFill(
   subscription: MemberContext["subscription"],
   event: TradeEvent,
   memberSymbol: string,
+  strategyName: string,
 ) {
   await prisma.copyTrade.update({
     where: { id: copyTradeId },
@@ -500,6 +521,16 @@ async function recordFill(
     resourceType: "CopyTrade",
     resourceId: copyTradeId,
     metadata: { symbol: memberSymbol, volume, ticket: result.ticket },
+  });
+
+  // The worker cannot reach the browser; the web tier relays this.
+  await publishUserEvent(subscription.userId, {
+    type: "COPY_TRADE",
+    status: "SUCCESS",
+    symbol: memberSymbol,
+    volume,
+    strategy: strategyName,
+    at: new Date().toISOString(),
   });
 }
 
@@ -591,6 +622,12 @@ async function pauseForBreach(subscription: MemberContext["subscription"], reaso
     resourceType: "StrategySubscription",
     resourceId: subscription.id,
     metadata: { reason },
+  });
+
+  await publishUserEvent(subscription.userId, {
+    type: "RISK_BREACH",
+    reason,
+    at: new Date().toISOString(),
   });
 
   logEvent({ event: "RISK_BREACH_PAUSED_COPYING", accountId: subscription.accountId, reason });

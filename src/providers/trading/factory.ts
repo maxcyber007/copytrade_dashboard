@@ -1,5 +1,6 @@
 import type { ITradeProvider } from "./ITradeProvider";
 import { MockTradingProvider } from "./MockTradingProvider";
+import { MetaApiProvider } from "./MetaApiProvider";
 import { getEnv } from "@/lib/env";
 import { AppError, ErrorCode } from "@/lib/errors";
 import type { Platform } from "@/types/trading";
@@ -21,8 +22,15 @@ export function getTradeProvider(): ITradeProvider {
       provider = new MockTradingProvider();
       break;
     case "metaapi":
-      // Written in Phase 11 against the official documentation at that time.
-      throw new AppError(ErrorCode.PROVIDER_ERROR, "The MetaApi provider is not implemented yet");
+      // Constructing it throws unless a token is configured, and every method
+      // still throws until it is written against the official documentation.
+      // Failing here means a misconfiguration is caught at startup rather than
+      // when the first member order is sent.
+      provider = new MetaApiProvider({
+        token: getEnv().METAAPI_TOKEN ?? "",
+        region: getEnv().METAAPI_REGION ?? "new-york",
+      });
+      break;
     default:
       throw new AppError(ErrorCode.PROVIDER_ERROR, `Unknown trading provider: ${configured}`);
   }

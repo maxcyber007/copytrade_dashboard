@@ -6,6 +6,7 @@ import { logEvent, logErrorEvent } from "@/lib/logger";
 import { getTradeProvider, assertPlatformSupported } from "@/providers/trading/factory";
 import type { CreateAccountInput } from "@/lib/validation/account";
 import { AuditAction, recordAudit } from "./audit.service";
+import { assertWithinPlanLimits } from "./subscription.service";
 import type { RequestMeta } from "./auth.service";
 
 /** Hard ceiling regardless of plan, so one account cannot exhaust the workers. */
@@ -27,6 +28,9 @@ export async function createAccount(userId: string, input: CreateAccountInput, m
   if ((await accountRepository.countForUser(userId)) >= MAX_ACCOUNTS_PER_USER) {
     throw new AppError(ErrorCode.CONFLICT, `A maximum of ${MAX_ACCOUNTS_PER_USER} accounts is allowed`);
   }
+
+  // The plan decides how many accounts a member may run at once.
+  await assertWithinPlanLimits(userId, "ACCOUNT");
 
   if (await accountRepository.existsForUser(userId, input.login, input.server)) {
     throw new AppError(ErrorCode.CONFLICT, "That login already exists on this server");

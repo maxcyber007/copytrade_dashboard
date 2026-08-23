@@ -10,12 +10,16 @@ A member's platform is a property of their account, not a separate product: an M
 master can be copied to MT4 members and vice versa, with symbol mapping and lot
 rounding bridging the brokers.
 
-> **Status: Phases 1–9 complete** — setup, database, authentication, member and
-> admin dashboards, strategy management, the provider marketplace, the mock
-> trading provider, and the full copy path: signed master trade events, the queue
-> and worker that fan them out, and the risk engine that decides what reaches each
-> member. `npm run demo` drives a master trade to member accounts end to end.
-> Next: real-time dashboard updates and the MetaApi provider. See [Roadmap](#roadmap).
+> **Status: Phases 1–15 complete except the MetaApi adapter (Phase 11).**
+> Everything runs on the mock trading provider: dashboards, strategy management,
+> the provider marketplace, signed master trade events, the copy and risk
+> engines, live updates, plans and billing, security hardening, tests and
+> deployment. `npm run demo` drives a master trade to member accounts end to end.
+>
+> **Phase 11 is deliberately unfinished**: `MetaApiProvider` throws on every
+> method rather than shipping guessed request shapes against live accounts.
+> See [docs/trading-provider.md](docs/trading-provider.md) for exactly what must
+> be verified before writing it.
 
 ## Architecture
 
@@ -107,7 +111,7 @@ Schema and index rationale: [docs/database.md](docs/database.md)
 With the app running (`npm run dev` or `docker compose up -d`):
 
 ```bash
-npm run smoke                                   # 65 checks against http://localhost:3000
+npm run smoke                                   # 75 checks against http://localhost:3000
 node scripts/smoke-test.mjs https://your-host   # or any deployment
 npm run demo                                    # drive a master trade to member accounts
 ```
@@ -242,14 +246,27 @@ See [docs/security.md](docs/security.md).
 ## Testing
 
 ```bash
-npm run test
+npm run test     # unit + integration (vitest)
+npm run smoke    # 75 end-to-end checks against a running server
+npm run verify   # everything CI runs
 ```
 
-Planned coverage (Phase 14): authentication, authorization, trade event signature
-verification, duplicate events, lot calculation for all four copy modes, risk
-limits, position and symbol mapping (including MT4 ticket remapping and MT5
-netting), retry behaviour, provider contract, and an
-integration test of the full master-trade → member-copy path.
+Unit tests cover credential encryption and HMAC, password hashing and auth
+validation, provider application rules, the mock provider's MT4 and MT5
+behaviour, lot calculation in all four modes with clamping and rounding, and
+every risk limit.
+
+The integration suite runs the real path against a real database — master trade
+event → copy engine → member accounts → copy trade rows — and asserts that one
+master trade produces different volumes for two members, that reprocessing an
+event opens nothing new, that the `(eventId, accountId)` constraint rejects a
+duplicate copy, that a partial close is proportional, that a disconnected member
+is not attempted, and that sub-minimum and disallowed-symbol trades are skipped
+rather than silently resized. It skips itself when no database is reachable.
+
+CI (`.github/workflows/ci.yml`) runs the secret scan, migrations, typecheck,
+both test suites and the build against PostgreSQL and Redis services, plus a
+build of both Docker targets.
 
 ## Roadmap
 
@@ -264,12 +281,12 @@ integration test of the full master-trade → member-copy path.
 | 7 | Master trade event API (HMAC) | done |
 | 8 | Copy engine + worker | done |
 | 9 | Risk engine | done |
-| 10 | Real-time dashboard (SSE) | planned |
-| 11 | MetaApi provider (MT4 + MT5) | planned |
-| 12 | Subscription | planned |
-| 13 | Security hardening | planned |
-| 14 | Testing | planned |
-| 15 | Production deployment | planned |
+| 10 | Real-time dashboard (SSE) | done |
+| 11 | MetaApi provider (MT4 + MT5) | **not implemented** — adapter throws until verified against the official API |
+| 12 | Subscription and billing | done |
+| 13 | Security hardening | done |
+| 14 | Testing (unit + integration) | done |
+| 15 | Production deployment (CI, backups) | done |
 
 ## Risk notice
 

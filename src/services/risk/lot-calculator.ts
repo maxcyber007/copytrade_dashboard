@@ -14,6 +14,8 @@ export type LotInputs = {
   brokerMinLot: number;
   brokerMaxLot: number;
   brokerLotStep: number;
+  /** Round a sub-minimum volume up to the broker minimum, or skip the trade. */
+  allowMinLotRounding: boolean;
   /** Account context */
   memberBalance: number;
   memberEquity: number;
@@ -26,7 +28,11 @@ export type LotInputs = {
 
 export type LotResult =
   | { ok: true; volume: number; rawVolume: number; clamped: boolean }
-  | { ok: false; reason: string; code: "INVALID_VOLUME" | "MISSING_STOP" | "MISSING_MASTER_BALANCE" };
+  | {
+      ok: false;
+      reason: string;
+      code: "INVALID_VOLUME" | "MISSING_STOP" | "MISSING_MASTER_BALANCE" | "BELOW_BROKER_MINIMUM";
+    };
 
 /**
  * Rounds down to the broker's lot step. Rounding up could exceed a member's
@@ -96,19 +102,41 @@ export function calculateLot(input: LotInputs): LotResult {
     return { ok: false, code: "INVALID_VOLUME", reason: "Calculated volume is not a tradable size" };
   }
 
-  const memberFloor = Math.max(input.minLot, input.brokerMinLot);
   const ceiling = Math.min(input.maxLot, input.brokerMaxLot);
+  const bounded = Math.min(Math.max(raw, input.minLot), ceiling);
 
-  const bounded = Math.min(Math.max(raw, memberFloor), ceiling);
+  // Below the broker's smallest tradable size the platform must not decide
+  // alone: rounding up hands the member more exposure than they configured, so
+  // it happens only when they asked for it.
+  if (bounded < input.brokerMinLot) {
+    if (!input.allowMinLotRounding) {
+      return {
+        ok: false,
+        code: "BELOW_BROKER_MINIMUM",
+        reason:
+          `Your settings size this trade at ${Number(bounded.toFixed(4))} lots, below the broker's ` +
+          `smallest tradable size of ${input.brokerMinLot}. Enable minimum-lot rounding to take it ` +
+          `at ${input.brokerMinLot} instead.`,
+      };
+    }
+
+    return { ok: true, volume: input.brokerMinLot, rawVolume: Number(raw.toFixed(4)), clamped: true };
+  }
+
   const volume = roundToStep(bounded, input.brokerLotStep);
 
-  // After rounding down, a volume below the broker minimum cannot be sent.
+  // Rounding down can still land under the minimum when the step is coarse.
   if (volume < input.brokerMinLot) {
-    return {
-      ok: false,
-      code: "INVALID_VOLUME",
-      reason: `Calculated volume ${volume} is below the broker minimum ${input.brokerMinLot}`,
-    };
+    if (!input.allowMinLotRounding) {
+      return {
+        ok: false,
+        code: "BELOW_BROKER_MINIMUM",
+        reason:
+          `Rounding ${Number(bounded.toFixed(4))} lots down to the broker's ${input.brokerLotStep} step ` +
+          `leaves less than its ${input.brokerMinLot} minimum`,
+      };
+    }
+    return { ok: true, volume: input.brokerMinLot, rawVolume: Number(raw.toFixed(4)), clamped: true };
   }
 
   return {

@@ -25,6 +25,7 @@ export const ErrorCode = {
   PROVIDER_ERROR: "PROVIDER_ERROR",
   POSITION_NOT_FOUND: "POSITION_NOT_FOUND",
   RISK_LIMIT_REACHED: "RISK_LIMIT_REACHED",
+  PLAN_LIMIT_REACHED: "PLAN_LIMIT_REACHED",
   INTERNAL_ERROR: "INTERNAL_ERROR",
 } as const;
 
@@ -54,6 +55,7 @@ const FRIENDLY: Record<string, string> = {
   PROVIDER_ERROR: "The trading provider reported an error.",
   POSITION_NOT_FOUND: "The related position could not be found.",
   RISK_LIMIT_REACHED: "A risk limit stopped this trade from being copied.",
+  PLAN_LIMIT_REACHED: "Your plan does not allow any more of these. Upgrade to add more.",
   INTERNAL_ERROR: "Something went wrong. Please try again.",
 };
 
@@ -106,6 +108,8 @@ function defaultStatus(code: ErrorCodeValue): number {
     case ErrorCode.MARKET_CLOSED:
     case ErrorCode.RISK_LIMIT_REACHED:
       return 422;
+    case ErrorCode.PLAN_LIMIT_REACHED:
+      return 402;
     case ErrorCode.POSITION_NOT_FOUND:
       return 404;
     // Upstream provider problems are gateway failures, not internal errors.

@@ -92,15 +92,19 @@ export class MockTradingProvider implements ITradeProvider {
       nextTicket: existing?.nextTicket ?? 100_000 + Math.floor(seeded(input.login) * 800_000),
     });
 
+    // A broker's minimum equals its step: one that trades in 0.1 increments
+    // cannot fill 0.05, so reporting 0.01 here would be fiction.
+    const lotStep = input.platform === "MT4" ? 0.1 : 0.01;
+
     return {
       providerAccountId,
       platform: input.platform,
       positionMode: netting ? "NETTING" : "HEDGING",
       currency: "USD",
       balance,
-      minLot: 0.01,
+      minLot: lotStep,
       maxLot: input.platform === "MT4" ? 50 : 100,
-      lotStep: input.platform === "MT4" ? 0.1 : 0.01,
+      lotStep,
     };
   }
 
@@ -142,12 +146,15 @@ export class MockTradingProvider implements ITradeProvider {
     const spec = SYMBOLS[symbol.toUpperCase()];
     if (!spec) return null;
 
+    // MT4 brokers in this simulation trade in coarser steps than MT5 ones, and
+    // the minimum tracks the step.
+    const lotStep = account.platform === "MT4" ? Math.max(spec.lotStep, 0.1) : spec.lotStep;
+
     return {
       symbol: symbol.toUpperCase(),
-      minLot: spec.minLot,
+      minLot: Math.max(spec.minLot, lotStep),
       maxLot: spec.maxLot,
-      // MT4 brokers in this simulation trade in coarser steps than MT5 ones.
-      lotStep: account.platform === "MT4" ? Math.max(spec.lotStep, 0.1) : spec.lotStep,
+      lotStep,
       digits: spec.digits,
       tradeAllowed: true,
     };
