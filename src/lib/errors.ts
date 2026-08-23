@@ -59,6 +59,29 @@ const FRIENDLY: Record<string, string> = {
   INTERNAL_ERROR: "Something went wrong. Please try again.",
 };
 
+/**
+ * Codes whose messages are written for the person reading them, so the specific
+ * text is more useful than the generic mapping — "1 subscription is still
+ * copying" beats "This item already exists".
+ *
+ * Authentication and provider codes are deliberately absent: their messages
+ * carry detail that must not reach a member (which half of a credential pair
+ * was wrong, what a broker replied).
+ */
+const EXPOSE_MESSAGE_FOR = new Set<string>([
+  ErrorCode.CONFLICT,
+  ErrorCode.VALIDATION_ERROR,
+  ErrorCode.FORBIDDEN,
+  ErrorCode.NOT_FOUND,
+  ErrorCode.PLAN_LIMIT_REACHED,
+  ErrorCode.RISK_LIMIT_REACHED,
+  ErrorCode.INVALID_VOLUME,
+  ErrorCode.INVALID_SYMBOL,
+  ErrorCode.PLATFORM_NOT_SUPPORTED,
+  ErrorCode.DUPLICATE_EVENT,
+  ErrorCode.STALE_REQUEST,
+]);
+
 export class AppError extends Error {
   readonly code: ErrorCodeValue;
   readonly httpStatus: number;
@@ -79,6 +102,11 @@ export class AppError extends Error {
   }
 
   get friendlyMessage(): string {
+    // A message we wrote for this specific situation beats the generic one,
+    // but only for codes whose text is safe to show.
+    if (EXPOSE_MESSAGE_FOR.has(this.code) && this.message && this.message !== this.code) {
+      return this.message;
+    }
     return FRIENDLY[this.code] ?? FRIENDLY.INTERNAL_ERROR!;
   }
 }

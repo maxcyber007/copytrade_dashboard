@@ -175,6 +175,7 @@ Implemented today:
 | POST/DELETE | `/api/provider/strategies/:id/keys`, `/api/provider/keys/:id` | Issue / revoke master EA credentials |
 | GET/POST/PUT/DELETE | `/api/admin/strategies[/:id][/status]` | Admin strategy management |
 | GET | `/api/admin/dashboard`, `/members`, `/accounts`, `/copy-trades`, `/errors` | Admin surfaces |
+| GET/PATCH/DELETE | `/api/admin/members/:id` | Member detail, edit, and guarded deletion |
 | POST | `/api/auth/register` | Create account, start session |
 | POST | `/api/auth/login` | Authenticate, start session |
 | POST | `/api/auth/logout` | Revoke session |

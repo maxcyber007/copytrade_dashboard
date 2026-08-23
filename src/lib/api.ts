@@ -35,13 +35,18 @@ export function fail(error: unknown, opts: { exposeDetails?: boolean } = {}) {
 
   if (error instanceof AppError) {
     if (error.httpStatus >= 500) logger.error({ event: "API_ERROR", code: error.code, message: error.message });
+
+    // Structured details (such as what blocks a deletion) travel with client
+    // errors so the UI can list them; server errors never carry internals out.
+    const includeDetails = Boolean(error.details) && (opts.exposeDetails || error.httpStatus < 500);
+
     return NextResponse.json<ApiFailure>(
       {
         ok: false,
         error: {
           code: error.code,
           message: error.friendlyMessage,
-          ...(opts.exposeDetails && error.details ? { details: error.details } : {}),
+          ...(includeDetails ? { details: error.details } : {}),
         },
       },
       { status: error.httpStatus },

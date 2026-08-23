@@ -36,6 +36,7 @@ export const userRepository = {
         status: true,
         createdAt: true,
         lastLoginAt: true,
+        lockedUntil: true,
         _count: { select: { tradingAccounts: true, subscriptions: true } },
       },
     }),

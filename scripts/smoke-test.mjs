@@ -392,6 +392,28 @@ console.log("\nAdmin surfaces are closed to members");
     const res = await request("GET", path);
     check(`member cannot read ${path}`, res.status === 403, `got ${res.status}`);
   }
+
+  // Member management is the sharpest tool in the admin area: a member must not
+  // be able to promote or delete anyone, including themselves.
+  const session = await request("GET", "/api/auth/session");
+  const ownId = session.json?.data?.user?.id;
+
+  if (ownId) {
+    const promote = await request("PATCH", `/api/admin/members/${ownId}`, {
+      body: { role: "ADMIN", status: "ACTIVE" },
+    });
+    check("member cannot promote themselves to admin", promote.status === 403, `got ${promote.status}`);
+
+    const remove = await request("DELETE", `/api/admin/members/${ownId}`, {
+      body: { confirmEmail: email },
+    });
+    check("member cannot delete an account through the admin API", remove.status === 403, `got ${remove.status}`);
+
+    const detail = await request("GET", `/api/admin/members/${ownId}`);
+    check("member cannot read admin member detail", detail.status === 403, `got ${detail.status}`);
+  } else {
+    skip("member cannot promote themselves to admin", "no session id available");
+  }
 }
 
 // ---------------------------------------------------------------------------

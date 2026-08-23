@@ -82,6 +82,21 @@ secret in one of those files is still caught.
 - The limiter fails open on a Redis outage so a cache incident cannot halt trading,
   while the database constraints still prevent duplicate orders.
 
+## Administrative privilege boundaries
+
+- An administrator cannot change their own role or status, delete their own
+  account, or leave the platform with no active administrator. These are checked
+  in the service, not the screen, so the API enforces them too.
+- Suspending a member revokes their sessions in the same transaction that pauses
+  their subscriptions: an open session cannot outlive the suspension.
+- A role change revokes that member's sessions, so a stale cookie cannot keep
+  the privileges it was issued with.
+- Deletion requires the admin to type the member's email, and is refused while
+  the member is still copying or still connected to a broker.
+- Every change and deletion is written to `AuditLog` with the acting admin, the
+  target and what changed — and the deletion entry is written before the row it
+  describes is removed.
+
 ## Provider privilege boundaries
 
 - A provider application is always created as `PENDING`; the status field is not
