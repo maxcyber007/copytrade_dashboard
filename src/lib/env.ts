@@ -46,6 +46,17 @@ const schema = z.object({
     .string()
     .default("true")
     .transform((v) => v !== "false"),
+}).superRefine((env, ctx) => {
+  // A missing token would otherwise surface as "the trading provider reported
+  // an error" the first time a member presses Connect. A configuration mistake
+  // belongs at startup, where whoever made it is looking.
+  if (env.TRADING_PROVIDER === "metaapi" && !env.METAAPI_TOKEN) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["METAAPI_TOKEN"],
+      message: "required when TRADING_PROVIDER=metaapi — set it to your MetaApi API token",
+    });
+  }
 });
 
 export type Env = z.infer<typeof schema>;
