@@ -10,16 +10,21 @@ A member's platform is a property of their account, not a separate product: an M
 master can be copied to MT4 members and vice versa, with symbol mapping and lot
 rounding bridging the brokers.
 
-> **Status: Phases 1–15 complete except the MetaApi adapter (Phase 11).**
-> Everything runs on the mock trading provider: dashboards, strategy management,
-> the provider marketplace, signed master trade events, the copy and risk
-> engines, live updates, plans and billing, security hardening, tests and
-> deployment. `npm run demo` drives a master trade to member accounts end to end.
+> **Status: Phases 1–15 complete.** Dashboards, strategy management, the
+> provider marketplace, signed master trade events, the copy and risk engines,
+> live updates, plans and billing, security hardening, tests and deployment all
+> run on the mock trading provider — `npm run demo` drives a master trade to
+> member accounts end to end.
 >
-> **Phase 11 is deliberately unfinished**: `MetaApiProvider` throws on every
-> method rather than shipping guessed request shapes against live accounts.
-> See [docs/trading-provider.md](docs/trading-provider.md) for exactly what must
-> be verified before writing it.
+> `MetaApiProvider` (Phase 11) is implemented against the official
+> `metaapi.cloud-sdk` typings and covered by unit tests using a fake SDK. The
+> SDK is an optional dependency (`npm install metaapi.cloud-sdk`). Verifying it
+> against a live **demo** account with your own token is the one step that
+> cannot be done from this repository — see
+> [docs/trading-provider.md](docs/trading-provider.md).
+>
+> A Master EA (MQL4/MQL5) that publishes the trade events, a real payment
+> gateway and 2FA are still outstanding before real money is involved.
 
 ## Architecture
 
@@ -62,7 +67,7 @@ Details: [docs/architecture.md](docs/architecture.md)
 | Database | PostgreSQL 16 + Prisma ORM |
 | Cache / Queue | Redis 7 + BullMQ (worker runs as its own process) |
 | Auth | Custom DB-backed sessions, Argon2id password hashing, `ADMIN` / `MEMBER` roles |
-| MT4 / MT5 | `ITradeProvider` abstraction — mock providers today, MetaApi later |
+| MT4 / MT5 | `ITradeProvider` abstraction — mock provider, or MetaApi (optional SDK) |
 | Deployment | Docker, Docker Compose, Nginx, HTTPS |
 
 ## Installation
@@ -211,8 +216,9 @@ One interface serves both platforms; the implementation absorbs the differences 
 MT4 is hedging-only and issues a new ticket on partial close, while MT5 may be
 netting, where the broker keeps one net position per symbol. Mock providers
 (Phase 6) make the whole system testable without a live account or real money;
-`MetaApiProvider` (Phase 11), which serves both platforms, will be written against
-the current official MetaApi documentation at that time.
+`MetaApiProvider` (Phase 11) serves both platforms in production, written against
+the official `metaapi.cloud-sdk` typings and loaded through a dynamic import so the
+SDK stays an optional dependency.
 See [docs/trading-provider.md](docs/trading-provider.md).
 
 ## Copy engine
@@ -305,7 +311,7 @@ build of both Docker targets.
 | 8 | Copy engine + worker | done |
 | 9 | Risk engine | done |
 | 10 | Real-time dashboard (SSE) | done |
-| 11 | MetaApi provider (MT4 + MT5) | **not implemented** — adapter throws until verified against the official API |
+| 11 | MetaApi provider (MT4 + MT5) | done — optional SDK, unit-tested against a fake; needs a demo-account run before live use |
 | 12 | Subscription and billing | done |
 | 13 | Security hardening | done |
 | 14 | Testing (unit + integration) | done |

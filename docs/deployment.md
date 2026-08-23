@@ -75,8 +75,9 @@ trading credentials in a restored dump cannot be decrypted.
 - [ ] Master EA points at the HTTPS endpoint with the production API key
 - [ ] `ENCRYPTION_KEY` backed up separately from the database
 - [ ] Backups scheduled via `scripts/backup-db.sh`, and a restore rehearsed
-- [ ] `TRADING_PROVIDER` left on `mock` until the MetaApi adapter is written and
-      verified — it throws on every method today, by design
+- [ ] `TRADING_PROVIDER` left on `mock` until the MetaApi adapter has been run
+      against a **demo** account end to end; switching it to `metaapi` also needs
+      `npm install metaapi.cloud-sdk` and `METAAPI_TOKEN`
 
 ## Scaling
 

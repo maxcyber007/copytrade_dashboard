@@ -22,10 +22,9 @@ export function getTradeProvider(): ITradeProvider {
       provider = new MockTradingProvider();
       break;
     case "metaapi":
-      // Constructing it throws unless a token is configured, and every method
-      // still throws until it is written against the official documentation.
-      // Failing here means a misconfiguration is caught at startup rather than
-      // when the first member order is sent.
+      // Constructing it throws unless a token is configured, so a
+      // misconfiguration is caught at startup rather than when the first member
+      // order is sent. The SDK itself is loaded on first use.
       provider = new MetaApiProvider({
         token: getEnv().METAAPI_TOKEN ?? "",
         region: getEnv().METAAPI_REGION ?? "new-york",
