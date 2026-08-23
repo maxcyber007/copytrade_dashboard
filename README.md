@@ -18,7 +18,7 @@ rounding bridging the brokers.
 >
 > `MetaApiProvider` (Phase 11) is implemented against the official
 > `metaapi.cloud-sdk` typings and covered by unit tests using a fake SDK. The
-> SDK is an optional dependency (`npm install metaapi.cloud-sdk`). Verifying it
+> SDK ships as an optional dependency, installed by `npm install`. Verifying it
 > against a live **demo** account with your own token is the one step that
 > cannot be done from this repository — see
 > [docs/trading-provider.md](docs/trading-provider.md).

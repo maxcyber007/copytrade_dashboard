@@ -69,18 +69,21 @@ and MT5 accounts. It is written against the official `metaapi.cloud-sdk` typings
 which are mirrored in `src/providers/trading/metaapi-sdk.ts`; every field name used
 comes from there, and nothing is assumed.
 
-### Installing the SDK
+### The SDK
 
-The SDK is an **optional dependency** — around 47 MB that a deployment running the
-mock has no use for. A deployment that sets `TRADING_PROVIDER=metaapi` installs it
-explicitly:
+`metaapi.cloud-sdk` is declared as an `optionalDependency`, so `npm install`
+brings it in and nothing else has to be remembered.
 
-```bash
-npm install metaapi.cloud-sdk
-```
+It is around 47 MB that a deployment running only the mock has no use for, which
+is why it was originally kept out of `package.json` — but then every
+`npm install metaapi.cloud-sdk` left the file modified, and every `git pull` that
+touched `package.json` refused to merge until that was cleaned up by hand. A
+recurring merge conflict is a worse cost than the megabytes.
 
-It is loaded through a dynamic import on first use. If it is missing, the provider
-fails with a message naming the install command rather than at order time.
+It is still loaded through a dynamic import on first use, so an install that
+skipped it (`--omit=optional`, or an optional install that failed) runs fine on
+the mock provider, and `TRADING_PROVIDER=metaapi` then fails with a message
+naming the package rather than failing somewhere obscure at order time.
 
 ### What the adapter does
 
@@ -159,7 +162,6 @@ mapping, not the broker. Before trading real money, run it against a **demo**
 account with your own token:
 
 ```bash
-npm install metaapi.cloud-sdk
 TRADING_PROVIDER=metaapi METAAPI_TOKEN=... METAAPI_REGION=new-york npm run dev
 ```
 

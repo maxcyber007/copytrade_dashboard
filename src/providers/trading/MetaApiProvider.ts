@@ -38,11 +38,9 @@ import { logErrorEvent, logEvent } from "@/lib/logger";
  * lifecycle and the retry policy, and its typings are the authoritative record
  * of every field name used here (see `metaapi-sdk.ts`).
  *
- * The SDK is an **optional** dependency, loaded through a dynamic import, so a
- * deployment running `TRADING_PROVIDER=mock` does not carry its ~47 MB. A
- * deployment that sets `TRADING_PROVIDER=metaapi` installs it:
- *
- *     npm install metaapi.cloud-sdk
+ * The SDK is an `optionalDependency`, loaded through a dynamic import: a build
+ * that cannot install it still runs on the mock provider, and the error names
+ * the package rather than failing somewhere obscure at order time.
  *
  * Two behaviours of the SDK shape this file and are easy to get wrong:
  *

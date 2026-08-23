@@ -77,7 +77,7 @@ trading credentials in a restored dump cannot be decrypted.
 - [ ] Backups scheduled via `scripts/backup-db.sh`, and a restore rehearsed
 - [ ] `TRADING_PROVIDER` left on `mock` until the MetaApi adapter has been run
       against a **demo** account end to end; switching it to `metaapi` also needs
-      `npm install metaapi.cloud-sdk` and `METAAPI_TOKEN`
+      `METAAPI_TOKEN`
 
 ## Scaling
 
