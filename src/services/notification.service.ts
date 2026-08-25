@@ -1,6 +1,6 @@
 import type { NotificationType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getEnv } from "@/lib/env";
+import { publicAppUrl } from "@/lib/env";
 import { logErrorEvent } from "@/lib/logger";
 import { getEmailProvider } from "@/providers/email/factory";
 import { publishUserEvent } from "@/lib/events";
@@ -55,7 +55,7 @@ export async function notify(input: NotifyInput): Promise<void> {
     await getEmailProvider().send({
       to: user.email,
       subject: input.title,
-      text: `${input.message}\n\n${input.link ? `${getEnv().APP_URL}${input.link}\n\n` : ""}— ${BRAND.name}`,
+      text: `${input.message}\n\n${input.link ? `${publicAppUrl()}${input.link}\n\n` : ""}— ${BRAND.name}`,
     });
   } catch (error) {
     logErrorEvent({

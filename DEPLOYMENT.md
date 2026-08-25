@@ -117,7 +117,8 @@ nginx-proxy-manager is attached to. For a stack of that name it is usually
 | --- | --- |
 | `PROXY_NETWORK` | `nginx-proxy-manager_default` |
 | `APP_URL` | `https://itdev.cmtc.ac.th` |
-| `ALLOWED_ORIGINS` | `https://copytrade-dashboard.vercel.app` |
+| `PUBLIC_APP_URL` | `https://trendxsynex.vercel.app` |
+| `ALLOWED_ORIGINS` | `https://trendxsynex.vercel.app` |
 | `POSTGRES_PASSWORD` | a strong password |
 | `AUTH_SECRET` | `openssl rand -base64 48` |
 | `ENCRYPTION_KEY` | `openssl rand -base64 32` |
@@ -125,6 +126,11 @@ nginx-proxy-manager is attached to. For a stack of that name it is usually
 | `MASTER_API_SECRET` | `openssl rand -hex 32` |
 | `TRADING_PROVIDER` | `metaapi` |
 | `METAAPI_TOKEN` | your MetaApi token |
+
+`PUBLIC_APP_URL` is the frontend, not this host. Every link that travels to a
+member — a password reset above all — is built from it, and `APP_URL` here is
+the API, which serves no pages. The backend refuses to start without it rather
+than emailing links that land on a 404.
 
 Everything else has a default. `SESSION_COOKIE_DOMAIN` is left unset on purpose:
 the cookie is set on Vercel's domain, and there is no shared parent domain to

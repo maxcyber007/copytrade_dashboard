@@ -9,6 +9,16 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_URL: z.string().url().default("http://localhost:3000"),
 
+  /**
+   * Where a member's browser goes.
+   *
+   * `APP_URL` is this deployment's own address, which on a split backend is the
+   * API — not somewhere a person can open. Links that travel to a member, a
+   * password reset above all, have to point at the frontend instead. Defaults
+   * to `APP_URL`, so a single-host install needs nothing.
+   */
+  PUBLIC_APP_URL: z.string().url().optional(),
+
   /** See `@/lib/runtime-config` — validated here so a typo fails at startup. */
   APP_ROLE: z.enum(["all", "api", "frontend"]).default("all"),
   /** Where server-rendered pages reach the API. Defaults to APP_URL. */
@@ -111,6 +121,19 @@ const schema = z.object({
     });
   }
 
+  // A backend-only deployment serves no pages, so falling back to APP_URL would
+  // put its own address into every password reset email — a link that lands on
+  // a 404. Refusing to start says so, rather than letting members discover it.
+  if (env.APP_ROLE === "api" && !env.PUBLIC_APP_URL) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["PUBLIC_APP_URL"],
+      message:
+        "required when APP_ROLE=api — the address members open in a browser, e.g. https://app.example.com. " +
+        "Emailed links are built from it, and APP_URL points at the API here.",
+    });
+  }
+
   // A missing token would otherwise surface as "the trading provider reported
   // an error" the first time a member presses Connect. A configuration mistake
   // belongs at startup, where whoever made it is looking.
@@ -155,3 +178,14 @@ export function getEnv(): Env {
 }
 
 export const isProduction = () => getEnv().NODE_ENV === "production";
+
+/**
+ * The address to put in something a member will click.
+ *
+ * Never `APP_URL` directly: on a split deployment that is the API's address,
+ * and a member opening it gets a 404.
+ */
+export function publicAppUrl(): string {
+  const env = getEnv();
+  return (env.PUBLIC_APP_URL ?? env.APP_URL).replace(/\/+$/, "");
+}

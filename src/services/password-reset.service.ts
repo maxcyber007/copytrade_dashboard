@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getEnv } from "@/lib/env";
+import { getEnv, publicAppUrl } from "@/lib/env";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { hashPassword } from "@/lib/auth/password";
 import { AppError, ErrorCode } from "@/lib/errors";
@@ -44,7 +44,7 @@ export async function requestPasswordReset(email: string, meta: RequestMeta): Pr
     },
   });
 
-  const link = `${getEnv().APP_URL}/reset-password?token=${token}`;
+  const link = `${publicAppUrl()}/reset-password?token=${token}`;
 
   // Delivery failure must not change what the caller sees. Returning an error
   // only for addresses that exist would tell a stranger which emails are

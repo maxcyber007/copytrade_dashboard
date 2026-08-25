@@ -29,6 +29,10 @@ x-app-env: &app-env
   APP_ROLE: api
   APP_URL: ${APP_URL:?set to https://itdev.cmtc.ac.th}
 
+  # Where members open the site in a browser. Password reset links are built
+  # from this, and APP_URL above is the API — not a page anyone can open.
+  PUBLIC_APP_URL: ${PUBLIC_APP_URL:?set to the frontend URL, e.g. https://trendxsynex.vercel.app}
+
   DATABASE_URL: postgresql://${POSTGRES_USER:-copytrade}:${POSTGRES_PASSWORD:?set a strong password}@postgres:5432/${POSTGRES_DB:-copytrade}?schema=public
   REDIS_URL: redis://redis:6379
 
