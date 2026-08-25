@@ -6,7 +6,7 @@
  * This module is the single description of which arrangement is in effect.
  *
  * It reads `process.env` directly and never throws. That is deliberate: it is
- * imported by `middleware.ts`, which runs on the Edge runtime where the
+ * imported by `proxy.ts`, which runs on the Edge runtime where the
  * validated backend schema in `@/lib/env` cannot load, and it must also work on
  * a frontend host that has none of the database or provider secrets.
  */

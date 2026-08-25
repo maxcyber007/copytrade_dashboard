@@ -86,7 +86,7 @@ function applyCors(response: NextResponse, origin: string | null): NextResponse 
   return response;
 }
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const origin = req.headers.get("origin");
   const isApiPath = pathname.startsWith("/api/");
