@@ -1,4 +1,4 @@
-import type { ITradeProvider } from "./ITradeProvider";
+import type { DeploymentState, ITradeProvider } from "./ITradeProvider";
 import type {
   AccountInfo,
   AccountTrade,
@@ -405,6 +405,72 @@ export class MetaApiProvider implements ITradeProvider {
         providerAccountId,
         reason: error instanceof Error ? error.message : "unknown",
       });
+    }
+  }
+
+  /**
+   * Stops the provider running this account without removing it.
+   *
+   * The cached connection goes first: leaving it open against an account that
+   * is being undeployed only produces errors from a session the platform has
+   * already given up on.
+   */
+  async undeployAccount(providerAccountId: string): Promise<void> {
+    await this.disconnectAccount(providerAccountId);
+
+    const client = await this.client();
+    const account = await client.metatraderAccountApi.getAccount(providerAccountId);
+
+    await account.undeploy();
+    // Undeployment is asynchronous at MetaApi; waiting means the account is
+    // genuinely stopped by the time the member sees it disabled. A timeout is
+    // not fatal — the request is already accepted and will settle.
+    await account.waitUndeployed(60).catch((error: unknown) => {
+      logErrorEvent({
+        event: "METAAPI_UNDEPLOY_WAIT_TIMEOUT",
+        providerAccountId,
+        reason: describeApiError(error),
+      });
+    });
+  }
+
+  async deployAccount(providerAccountId: string): Promise<void> {
+    const client = await this.client();
+    const account = await client.metatraderAccountApi.getAccount(providerAccountId);
+
+    await account.deploy();
+    await account.waitDeployed(60).catch((error: unknown) => {
+      logErrorEvent({
+        event: "METAAPI_DEPLOY_WAIT_TIMEOUT",
+        providerAccountId,
+        reason: describeApiError(error),
+      });
+    });
+  }
+
+  /**
+   * Reads the account's deployment state straight from MetaApi.
+   *
+   * Anything the SDK reports that is not one of the four states we act on is
+   * mapped to UNKNOWN rather than guessed at — showing a member "deployed"
+   * because a value was unrecognised would be worse than admitting we do not
+   * know.
+   */
+  async getDeploymentState(providerAccountId: string): Promise<DeploymentState> {
+    const client = await this.client();
+    const account = await client.metatraderAccountApi.getAccount(providerAccountId);
+
+    switch (String(account.state).toUpperCase()) {
+      case "DEPLOYED":
+        return "DEPLOYED";
+      case "UNDEPLOYED":
+        return "UNDEPLOYED";
+      case "DEPLOYING":
+        return "DEPLOYING";
+      case "UNDEPLOYING":
+        return "UNDEPLOYING";
+      default:
+        return "UNKNOWN";
     }
   }
 

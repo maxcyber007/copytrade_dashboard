@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useT } from "@/components/i18n/locale-provider";
+import { apiFetch } from "@/lib/api-client/browser";
 
 export function ResetPasswordForm({ token }: { token: string }) {
   const router = useRouter();
+  const t = useT();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -22,13 +26,13 @@ export function ResetPasswordForm({ token }: { token: string }) {
     const confirm = String(form.get("confirm") ?? "");
 
     if (password !== confirm) {
-      setFieldErrors({ confirm: "The two passwords do not match" });
+      setFieldErrors({ confirm: t.auth.passwordsDoNotMatch });
       setLoading(false);
       return;
     }
 
     try {
-      const res = await fetch("/api/auth/reset-password", {
+      const res = await apiFetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),
@@ -42,12 +46,12 @@ export function ResetPasswordForm({ token }: { token: string }) {
         if (json.error?.details) {
           setFieldErrors(Object.fromEntries(json.error.details.map((d) => [d.path, d.message])));
         }
-        throw new Error(json.error?.message ?? "Could not reset the password");
+        throw new Error(json.error?.message ?? t.auth.couldNotReset);
       }
 
       router.replace("/login?reset=1");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not reset the password");
+      setError(err instanceof Error ? err.message : t.auth.couldNotReset);
     } finally {
       setLoading(false);
     }
@@ -58,7 +62,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
       <Input
         name="password"
         type="password"
-        label="New password"
+        label={t.auth.newPassword}
         required
         autoComplete="new-password"
         error={fieldErrors.password}
@@ -66,17 +70,18 @@ export function ResetPasswordForm({ token }: { token: string }) {
       <Input
         name="confirm"
         type="password"
-        label="Confirm new password"
+        label={t.auth.confirmPassword}
         required
         autoComplete="new-password"
         error={fieldErrors.confirm}
       />
       <p className="text-xs text-muted">
-        At least 10 characters, with upper and lower case letters and a number.
+        {t.auth.passwordHint}
       </p>
       {error && <p className="text-sm text-red-500">{error}</p>}
       <Button type="submit" className="w-full" loading={loading}>
-        Set new password
+        <KeyRound className="h-4 w-4" />
+        {t.auth.setNewPassword}
       </Button>
     </form>
   );

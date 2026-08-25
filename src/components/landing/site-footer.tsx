@@ -1,35 +1,39 @@
 import Link from "next/link";
 import { Logo } from "./logo";
 import { BRAND } from "@/lib/brand";
+import { getDictionary } from "@/lib/i18n/server";
+import { apiUrl } from "@/lib/api-client/browser";
 
-const COLUMNS = [
-  {
-    title: "Platform",
-    links: [
-      { href: "#how", label: "How it works" },
-      { href: "#features", label: "Features" },
-      { href: "#pricing", label: "Pricing" },
-      { href: "/api/health", label: "System status" },
-    ],
-  },
-  {
-    title: "Providers",
-    links: [
-      { href: "#providers", label: "Provider program" },
-      { href: "/provider/apply", label: "Apply" },
-      { href: "/login", label: "Provider sign in" },
-    ],
-  },
-  {
-    title: "Account",
-    links: [
-      { href: "/register", label: "Create account" },
-      { href: "/login", label: "Sign in" },
-    ],
-  },
-];
+export async function SiteFooter() {
+  const t = await getDictionary();
 
-export function SiteFooter() {
+  const columns = [
+    {
+      title: t.footer.platform,
+      links: [
+        { href: "#how", label: t.footer.linkHow },
+        { href: "#features", label: t.footer.linkFeatures },
+        { href: "#pricing", label: t.footer.linkPricing },
+        { href: apiUrl("/api/health"), label: t.footer.linkStatus },
+      ],
+    },
+    {
+      title: t.footer.providers,
+      links: [
+        { href: "#providers", label: t.footer.linkProgram },
+        { href: "/provider/apply", label: t.footer.linkApply },
+        { href: "/login", label: t.footer.linkProviderSignIn },
+      ],
+    },
+    {
+      title: t.footer.account,
+      links: [
+        { href: "/register", label: t.footer.linkCreate },
+        { href: "/login", label: t.footer.linkSignIn },
+      ],
+    },
+  ];
+
   return (
     <footer className="border-t" style={{ borderColor: "var(--panel-border)", background: "var(--bg-deep)" }}>
       <div className="mx-auto max-w-6xl px-5 py-14">
@@ -42,12 +46,11 @@ export function SiteFooter() {
               </span>
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted">
-              Cloud copy trading for MetaTrader 4 and MetaTrader 5, with a marketplace for members
-              who want to publish their own signals.
+              {t.footer.blurb}
             </p>
           </div>
 
-          {COLUMNS.map((column) => (
+          {columns.map((column) => (
             <div key={column.title}>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{column.title}</p>
               <ul className="mt-4 space-y-2.5">
@@ -67,10 +70,9 @@ export function SiteFooter() {
           className="mt-12 flex flex-col gap-4 border-t pt-6 text-xs text-muted sm:flex-row sm:items-center sm:justify-between"
           style={{ borderColor: "var(--panel-border)" }}
         >
-          <p>© {new Date().getFullYear()} {BRAND.name}. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {BRAND.name}. {t.footer.rights}</p>
           <p className="max-w-xl leading-relaxed">
-            Trading leveraged products carries a high level of risk and can result in the loss of
-            your capital. Past performance does not guarantee future results.
+            {t.footer.risk}
           </p>
         </div>
       </div>

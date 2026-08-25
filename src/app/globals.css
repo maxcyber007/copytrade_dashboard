@@ -3,6 +3,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+  /* Prompt, loaded by next/font in the root layout. Registering it here is what
+     makes font-sans (and Tailwind's default body stack) resolve to it. */
+  --font-sans: var(--font-prompt), ui-sans-serif, system-ui, -apple-system, sans-serif;
+
   /* Gold accent scale — the brand colour of the platform */
   --color-gold-100: #fbf3d9;
   --color-gold-200: #f3e0a8;
@@ -31,6 +35,15 @@
   --gold-line: rgba(154, 123, 22, 0.28);
   --gold-glow: rgba(201, 162, 39, 0.16);
   --hero-grid: rgba(20, 22, 26, 0.05);
+  /* Futuristic accents that sit alongside the gold without competing with it */
+  --ai-cyan: #0e8fa8;
+  --ai-violet: #6d5bd0;
+  --ai-glow: rgba(14, 143, 168, 0.16);
+  --candle-up: #16a34a;
+  --candle-down: #dc2626;
+  --chart-grid: rgba(20, 22, 26, 0.07);
+  --hud-line: rgba(20, 22, 26, 0.14);
+  --hero-chart-opacity: 0.20;
 }
 
 .dark {
@@ -46,12 +59,21 @@
   --gold-line: rgba(227, 196, 100, 0.26);
   --gold-glow: rgba(227, 196, 100, 0.14);
   --hero-grid: rgba(227, 196, 100, 0.05);
+  --ai-cyan: #4fd8f0;
+  --ai-violet: #a78bfa;
+  --ai-glow: rgba(79, 216, 240, 0.18);
+  --candle-up: #26d07c;
+  --candle-down: #ff5a6a;
+  --chart-grid: rgba(227, 196, 100, 0.07);
+  --hud-line: rgba(227, 196, 100, 0.22);
+  --hero-chart-opacity: 0.32;
 }
 
 html,
 body {
   background: var(--bg);
   color: var(--text);
+  font-family: var(--font-sans);
 }
 
 body {
@@ -183,4 +205,287 @@ body {
   .card-gold:hover {
     transform: none;
   }
+}
+
+/* --- AI / futuristic surfaces --------------------------------------------- */
+
+/* Slow aurora wash behind the hero. Two offset radial gradients drifting out of
+   phase read as depth without the cost of a canvas. */
+.ai-mesh {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 46% at 18% 22%, var(--ai-glow), transparent 62%),
+    radial-gradient(38% 42% at 82% 18%, var(--gold-glow), transparent 60%),
+    radial-gradient(46% 40% at 62% 88%, color-mix(in srgb, var(--ai-violet) 16%, transparent), transparent 64%);
+  animation: aurora 22s ease-in-out infinite alternate;
+}
+
+/* Faint live chart drifting behind the hero copy. The horizontal motion is
+   driven from the component (rAF), not from CSS — see hero-backdrop.tsx. */
+.hero-chart {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* A band across the middle of the copy rather than the whole section, so the
+     chart is not stretched over the full hero height. */
+  top: 8%;
+  height: 46%;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: var(--hero-chart-opacity);
+  /* Both side edges fade all the way out. */
+  mask-image: linear-gradient(90deg, transparent 0%, #000 20%, #000 80%, transparent 100%);
+}
+
+.hero-chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Perspective floor grid that scrolls toward the viewer. */
+.ai-floor {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 260px;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--hero-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hero-grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  transform: perspective(340px) rotateX(62deg);
+  transform-origin: bottom center;
+  mask-image: linear-gradient(to top, #000 5%, transparent 85%);
+  animation: grid-scroll 7s linear infinite;
+}
+
+/* Frosted console panel */
+.glass-panel {
+  position: relative;
+  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--panel-border);
+  box-shadow:
+    0 30px 70px -40px var(--gold-glow),
+    inset 0 1px 0 0 color-mix(in srgb, var(--gold) 12%, transparent);
+}
+
+/* HUD corner brackets — drawn with gradients so there are no extra elements. */
+.hud-frame::before,
+.hud-frame::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  border-color: var(--gold-line);
+  border-style: solid;
+}
+
+.hud-frame::before {
+  top: -1px;
+  left: -1px;
+  border-width: 1px 0 0 1px;
+  border-top-left-radius: 4px;
+}
+
+.hud-frame::after {
+  right: -1px;
+  bottom: -1px;
+  border-width: 0 1px 1px 0;
+  border-bottom-right-radius: 4px;
+}
+
+/* Sweeping scan beam used over the chart */
+.scan-beam {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.scan-beam::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--ai-cyan) 12%, transparent),
+    transparent
+  );
+  animation: scan-sweep 5.5s ease-in-out infinite;
+}
+
+/* Small blinking status dot for "live" readouts */
+.live-dot {
+  box-shadow: 0 0 0 0 currentColor;
+  animation: live-ring 2s ease-out infinite;
+}
+
+/* Candles rise into place on first paint */
+.candle-in {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: candle-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.tick-up {
+  animation: tick-flash-up 0.6s ease-out;
+}
+
+.tick-down {
+  animation: tick-flash-down 0.6s ease-out;
+}
+
+@keyframes aurora {
+  0%   { transform: translate3d(0, 0, 0) scale(1); opacity: 0.9; }
+  50%  { transform: translate3d(-2%, 2%, 0) scale(1.06); opacity: 1; }
+  100% { transform: translate3d(2%, -1%, 0) scale(1.02); opacity: 0.85; }
+}
+
+@keyframes grid-scroll {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 0 48px, 48px 0; }
+}
+
+@keyframes scan-sweep {
+  0%   { transform: translateX(-120%); }
+  55%  { transform: translateX(320%); }
+  100% { transform: translateX(320%); }
+}
+
+@keyframes live-ring {
+  0%   { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  70%  { box-shadow: 0 0 0 7px transparent; opacity: 0.75; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
+}
+
+@keyframes candle-rise {
+  from { transform: scaleY(0.05); opacity: 0; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes tick-flash-up {
+  0%   { fill: var(--candle-up); }
+  100% { fill: currentColor; }
+}
+
+@keyframes tick-flash-down {
+  0%   { fill: var(--candle-down); }
+  100% { fill: currentColor; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-mesh,
+  .ai-floor,
+  .scan-beam::after,
+  .live-dot,
+  .candle-in,
+  .tick-up,
+  .tick-down {
+    animation: none !important;
+  }
+
+  .candle-in {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* --- Auth screen ---------------------------------------------------------- */
+
+/* Card with a beam of light travelling around its edge.
+   The gradient is rotated as an element rather than animating a conic
+   `from` angle, which would need @property and silently not animate where
+   that is unsupported. */
+.beam-border {
+  position: relative;
+  padding: 1px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.beam-border::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  width: 190%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 296deg,
+    var(--gold) 334deg,
+    var(--ai-cyan) 348deg,
+    transparent 360deg
+  );
+  animation: beam-spin 9s linear infinite;
+}
+
+/* Sits inside .beam-border, so only the 1px ring of the parent shows through */
+.beam-inner {
+  position: relative;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(18px);
+  box-shadow:
+    0 40px 80px -50px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 0 color-mix(in srgb, var(--gold) 14%, transparent);
+}
+
+/* Signal travelling along a neural edge */
+.neural-edge {
+  stroke-dasharray: 5 34;
+  animation: signal-flow 2.6s linear infinite;
+}
+
+.neural-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: node-pulse 3.2s ease-in-out infinite;
+}
+
+/* Slow concentric sweep behind the visual */
+.radar-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: radar-out 4.5s ease-out infinite;
+}
+
+@keyframes beam-spin {
+  to { rotate: 360deg; }
+}
+
+@keyframes signal-flow {
+  from { stroke-dashoffset: 39; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes node-pulse {
+  0%, 100% { opacity: 0.45; scale: 0.85; }
+  50%      { opacity: 1;    scale: 1.15; }
+}
+
+@keyframes radar-out {
+  0%   { opacity: 0.5; scale: 0.2; }
+  80%  { opacity: 0;   scale: 1; }
+  100% { opacity: 0;   scale: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beam-border::before,
+  .neural-edge,
+  .neural-node,
+  .radar-ring {
+    animation: none !important;
+  }
+
+  .neural-edge { stroke-dasharray: none; }
+  .radar-ring { opacity: 0.18; }
 }

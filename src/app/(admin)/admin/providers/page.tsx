@@ -1,18 +1,20 @@
-import { requireAdmin } from "@/lib/auth/session";
-import { providerRepository } from "@/repositories/provider.repository";
+import { requireAdmin } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ProviderReviewActions } from "@/components/admin/provider-review-actions";
+import { getDictionary } from "@/lib/i18n/server";
+import { formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminProvidersPage() {
   await requireAdmin();
 
-  const [providers, counts] = await Promise.all([
-    providerRepository.listForAdmin({ take: 100 }),
-    providerRepository.countByStatus(),
+  const [{ providers, counts }, t] = await Promise.all([
+    loadPageData("admin/providers"),
+    getDictionary(),
   ]);
 
   const byStatus = Object.fromEntries(counts.map((c) => [c.status, c._count]));
@@ -20,9 +22,9 @@ export default async function AdminProvidersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Signal providers</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.admin.providersTitle}</h1>
         <p className="text-sm text-muted">
-          Review applications. Only approved providers can publish a live strategy.
+          {t.admin.providersSubtitle}
         </p>
       </div>
 
@@ -36,7 +38,7 @@ export default async function AdminProvidersPage() {
       </div>
 
       {providers.length === 0 ? (
-        <EmptyState title="No applications yet" description="Member applications to publish signals appear here." />
+        <EmptyState title={t.admin.noApplications} description={t.admin.noApplicationsBody} />
       ) : (
         <div className="space-y-4">
           {providers.map((provider) => (
@@ -48,18 +50,19 @@ export default async function AdminProvidersPage() {
                     <StatusBadge status={provider.status} />
                   </div>
                   <p className="mt-1 text-sm text-muted">
-                    {provider.user.email} · applied {provider.appliedAt.toLocaleDateString()} ·{" "}
-                    {provider._count.strategies} {provider._count.strategies === 1 ? "strategy" : "strategies"}
+                    {provider.user.email} · {t.admin.applied}{" "}
+                    {formatDate(provider.appliedAt)} · {provider._count.strategies}{" "}
+                    {provider._count.strategies === 1 ? t.admin.strategyOne : t.admin.strategyMany}
                   </p>
                   {provider.headline && <p className="mt-3 text-sm">{provider.headline}</p>}
                   {provider.bio && <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted">{provider.bio}</p>}
                   <p className="mt-3 text-sm text-muted tabular-nums">
-                    Performance fee {String(provider.performanceFeePct)}% · Monthly $
+                    {t.admin.performanceFeeLabel} {String(provider.performanceFeePct)}% · {t.admin.monthlyLabel} $
                     {String(provider.subscriptionPriceMonthly)}
                     {provider.website ? ` · ${provider.website}` : ""}
                   </p>
                   {provider.reviewNote && (
-                    <p className="mt-3 text-xs text-muted">Internal note: {provider.reviewNote}</p>
+                    <p className="mt-3 text-xs text-muted">{t.admin.internalNote} {provider.reviewNote}</p>
                   )}
                 </div>
 

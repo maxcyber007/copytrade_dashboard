@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/components/i18n/locale-provider";
 
 export function Toast({
   message,
@@ -12,6 +13,8 @@ export function Toast({
   tone?: "info" | "success" | "error";
   onDismiss: () => void;
 }) {
+  const t = useT();
+
   useEffect(() => {
     const timer = setTimeout(onDismiss, 5000);
     return () => clearTimeout(timer);
@@ -28,7 +31,7 @@ export function Toast({
     >
       <div className="flex items-start gap-3">
         <span className="flex-1">{message}</span>
-        <button type="button" onClick={onDismiss} className="text-muted transition hover:opacity-70" aria-label="Dismiss">
+        <button type="button" onClick={onDismiss} className="text-muted transition hover:opacity-70" aria-label={t.common.dismiss}>
           ×
         </button>
       </div>

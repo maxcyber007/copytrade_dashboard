@@ -1,40 +1,41 @@
-import { requireAdmin } from "@/lib/auth/session";
-import { accountRepository } from "@/repositories/account.repository";
+import { requireAdmin } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { Table, Td, Th } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, toNumber } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminAccountsPage() {
   await requireAdmin();
-  const accounts = await accountRepository.listForAdmin();
+  const [{ accounts }, t] = await Promise.all([loadPageData("admin/accounts"), getDictionary()]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Trading accounts</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.admin.accountsTitle}</h1>
         <p className="text-sm text-muted">
-          Connection and copy state across every member. Credentials are never loaded here.
+          {t.admin.accountsSubtitle}
         </p>
       </div>
 
       {accounts.length === 0 ? (
-        <EmptyState title="No trading accounts yet" />
+        <EmptyState title={t.admin.noAccounts} />
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>Owner</Th>
-              <Th>Account</Th>
-              <Th>Platform</Th>
-              <Th>Mode</Th>
-              <Th>Connection</Th>
-              <Th>Copy</Th>
-              <Th className="text-right">Equity</Th>
-              <Th className="text-right">Open</Th>
-              <Th>Last sync</Th>
+              <Th>{t.admin.thOwner}</Th>
+              <Th>{t.admin.thAccount}</Th>
+              <Th>{t.admin.thPlatform}</Th>
+              <Th>{t.admin.thMode}</Th>
+              <Th>{t.admin.thConnection}</Th>
+              <Th>{t.admin.thCopy}</Th>
+              <Th className="text-right">{t.admin.thEquity}</Th>
+              <Th className="text-right">{t.admin.thOpen}</Th>
+              <Th>{t.admin.thLastSync}</Th>
             </tr>
           </thead>
           <tbody>

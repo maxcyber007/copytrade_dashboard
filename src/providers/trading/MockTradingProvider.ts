@@ -1,4 +1,4 @@
-import type { ITradeProvider } from "./ITradeProvider";
+import type { DeploymentState, ITradeProvider } from "./ITradeProvider";
 import type {
   AccountInfo,
   AccountTradeHistory,
@@ -131,6 +131,24 @@ export class MockTradingProvider implements ITradeProvider {
   async disconnectAccount(providerAccountId: string): Promise<void> {
     // Positions are kept: disconnecting is not the same as closing trades.
     accounts.get(providerAccountId);
+  }
+
+  /**
+   * Nothing to stop or start in memory, but the account must still exist —
+   * silently succeeding for an unknown id would let a bug through that the
+   * real provider would have rejected.
+   */
+  async undeployAccount(providerAccountId: string): Promise<void> {
+    this.require(providerAccountId);
+  }
+
+  async deployAccount(providerAccountId: string): Promise<void> {
+    this.require(providerAccountId);
+  }
+
+  async getDeploymentState(providerAccountId: string): Promise<DeploymentState> {
+    this.require(providerAccountId);
+    return "DEPLOYED";
   }
 
   async getAccountInfo(providerAccountId: string): Promise<AccountInfo> {

@@ -6,9 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { AlertTriangle, BadgeCheck, Check, HelpCircle, Pause, Play, Plus, Server, Square, Trash2 } from "lucide-react";
 import { Toast } from "@/components/ui/toast";
 import { formatPercent } from "@/lib/utils";
 import { SubscribeDialog } from "./subscribe-dialog";
+import { useT } from "@/components/i18n/locale-provider";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { apiFetch } from "@/lib/api-client/browser";
 
 export type StrategyView = {
   id: string;
@@ -26,6 +30,10 @@ export type StrategyView = {
   winRatePct: number;
   totalTrades: number;
   memberCount: number;
+  /** DEMO or LIVE, or null when the strategy publishes through a master EA. */
+  masterAccountType: string | null;
+  masterBroker: string | null;
+  masterServer: string | null;
 };
 
 export type AccountOption = { id: string; label: string; platform: string; connectionStatus: string };
@@ -55,6 +63,7 @@ export function StrategyBrowser({
   subscriptions: SubscriptionView[];
 }) {
   const router = useRouter();
+  const t = useT();
   const [dialogStrategy, setDialogStrategy] = useState<StrategyView | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
@@ -62,33 +71,39 @@ export function StrategyBrowser({
   async function control(subscriptionId: string, action: "start" | "pause" | "stop") {
     setBusy(`${subscriptionId}:${action}`);
     try {
-      const res = await fetch(`/api/copy/${action}`, {
+      const res = await apiFetch(`/api/copy/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscriptionId }),
       });
       const json = (await res.json()) as { ok: boolean; error?: { message: string } };
-      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? "Request failed");
-      setToast({ message: `Copying ${action === "start" ? "started" : `${action}d`}`, tone: "success" });
+      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? t.browser.requestFailed);
+      const done =
+        action === "start"
+          ? t.browser.copyingStarted
+          : action === "pause"
+            ? t.browser.copyingPaused
+            : t.browser.copyingStopped;
+      setToast({ message: done, tone: "success" });
       router.refresh();
     } catch (error) {
-      setToast({ message: error instanceof Error ? error.message : "Request failed", tone: "error" });
+      setToast({ message: error instanceof Error ? error.message : t.browser.requestFailed, tone: "error" });
     } finally {
       setBusy(null);
     }
   }
 
   async function unsubscribe(subscriptionId: string, name: string) {
-    if (!window.confirm(`Unsubscribe from "${name}"?`)) return;
+    if (!window.confirm(t.browser.unsubscribeConfirm.replace("{name}", name))) return;
     setBusy(`${subscriptionId}:delete`);
     try {
-      const res = await fetch(`/api/copy/${subscriptionId}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/copy/${subscriptionId}`, { method: "DELETE" });
       const json = (await res.json()) as { ok: boolean; error?: { message: string } };
-      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? "Request failed");
-      setToast({ message: "Unsubscribed", tone: "success" });
+      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? t.browser.requestFailed);
+      setToast({ message: t.browser.unsubscribed, tone: "success" });
       router.refresh();
     } catch (error) {
-      setToast({ message: error instanceof Error ? error.message : "Request failed", tone: "error" });
+      setToast({ message: error instanceof Error ? error.message : t.browser.requestFailed, tone: "error" });
     } finally {
       setBusy(null);
     }
@@ -98,12 +113,12 @@ export function StrategyBrowser({
     <div className="space-y-8">
       {subscriptions.length > 0 && (
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Your subscriptions</h2>
+          <h2 className="text-lg font-semibold">{t.browser.yourSubscriptions}</h2>
           {subscriptions.map((subscription) => (
             <Card key={subscription.id}>
               <CardHeader
                 title={subscription.strategyName}
-                subtitle={`${subscription.accountLabel} · ${describeLot(subscription)}`}
+                subtitle={`${subscription.accountLabel} · ${describeLot(subscription, t)}`}
                 action={<StatusBadge status={subscription.copyStatus} />}
               />
               <div className="flex flex-wrap gap-2">
@@ -114,11 +129,13 @@ export function StrategyBrowser({
                     loading={busy === `${subscription.id}:pause`}
                     onClick={() => control(subscription.id, "pause")}
                   >
-                    Pause
+                    <Pause className="h-4 w-4" />
+                    {t.browser.pause}
                   </Button>
                 ) : (
                   <Button size="sm" loading={busy === `${subscription.id}:start`} onClick={() => control(subscription.id, "start")}>
-                    Start copying
+                    <Play className="h-4 w-4" />
+                    {t.browser.startCopying}
                   </Button>
                 )}
                 <Button
@@ -127,7 +144,8 @@ export function StrategyBrowser({
                   loading={busy === `${subscription.id}:stop`}
                   onClick={() => control(subscription.id, "stop")}
                 >
-                  Stop
+                  <Square className="h-4 w-4" />
+                  {t.browser.stop}
                 </Button>
                 <Button
                   size="sm"
@@ -135,7 +153,8 @@ export function StrategyBrowser({
                   loading={busy === `${subscription.id}:delete`}
                   onClick={() => unsubscribe(subscription.id, subscription.strategyName)}
                 >
-                  Unsubscribe
+                  <Trash2 className="h-4 w-4" />
+                  {t.browser.unsubscribe}
                 </Button>
               </div>
             </Card>
@@ -144,12 +163,12 @@ export function StrategyBrowser({
       )}
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Available strategies</h2>
+        <h2 className="text-lg font-semibold">{t.browser.available}</h2>
 
         {strategies.length === 0 ? (
           <EmptyState
-            title="No strategies published yet"
-            description="Published strategies from the platform and approved providers appear here."
+            title={t.browser.emptyTitle}
+            description={t.browser.emptyBody}
           />
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -159,32 +178,36 @@ export function StrategyBrowser({
                 <Card key={strategy.id}>
                   <CardHeader
                     title={strategy.name}
-                    subtitle={`${strategy.providerName} · ${strategy.code} · master on ${strategy.masterPlatform}`}
+                    subtitle={`${strategy.providerName} · ${strategy.code} · ${t.browser.masterOn} ${strategy.masterPlatform}`}
                     action={<StatusBadge status={strategy.status} />}
                   />
+                  <SourceBadges strategy={strategy} t={t} />
+
                   {strategy.description && (
                     <p className="mb-4 text-sm leading-relaxed text-muted">{strategy.description}</p>
                   )}
 
                   <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                    <Metric label="Return" value={formatPercent(strategy.totalReturnPct)} />
-                    <Metric label="Max DD" value={formatPercent(strategy.maxDrawdownPct)} />
-                    <Metric label="Win rate" value={formatPercent(strategy.winRatePct)} />
-                    <Metric label="Members" value={String(strategy.memberCount)} />
+                    <Metric label={t.browser.metricReturn} value={formatPercent(strategy.totalReturnPct)} />
+                    <Metric label={t.browser.metricMaxDd} value={formatPercent(strategy.maxDrawdownPct)} />
+                    <Metric label={t.browser.metricWinRate} value={formatPercent(strategy.winRatePct)} />
+                    <Metric label={t.browser.metricMembers} value={String(strategy.memberCount)} />
                   </dl>
 
                   <p className="mt-4 text-xs text-muted">
                     {strategy.performanceFeePct > 0 || strategy.subscriptionPriceMonthly > 0
-                      ? `Provider terms: ${strategy.performanceFeePct}% performance fee${
-                          strategy.subscriptionPriceMonthly > 0
-                            ? ` · $${strategy.subscriptionPriceMonthly}/month`
-                            : ""
-                        }`
-                      : "Published free by the provider"}
+                      ? t.browser.providerTerms.replace("{fee}", String(strategy.performanceFeePct)) +
+                        (strategy.subscriptionPriceMonthly > 0
+                          ? t.browser.perMonthSuffix.replace(
+                              "{price}",
+                              String(strategy.subscriptionPriceMonthly),
+                            )
+                          : "")
+                      : t.browser.publishedFree}
                   </p>
                   {strategy.totalTrades === 0 && (
                     <p className="mt-1 text-xs text-muted">
-                      No trade history yet — performance figures start at zero until this strategy trades.
+                      {t.browser.noHistory}
                     </p>
                   )}
 
@@ -194,7 +217,12 @@ export function StrategyBrowser({
                       disabled={subscribed || strategy.status !== "ACTIVE"}
                       onClick={() => setDialogStrategy(strategy)}
                     >
-                      {subscribed ? "Already subscribed" : strategy.status === "ACTIVE" ? "Subscribe" : "Not accepting"}
+                      {subscribed ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                      {subscribed
+                        ? t.browser.alreadySubscribed
+                        : strategy.status === "ACTIVE"
+                          ? t.browser.subscribe
+                          : t.browser.notAccepting}
                     </Button>
                   </div>
                 </Card>
@@ -222,16 +250,73 @@ export function StrategyBrowser({
   );
 }
 
-function describeLot(subscription: SubscriptionView): string {
+/**
+ * Where the strategy's trades actually come from.
+ *
+ * A demo source is called out rather than merely stated: copying it moves real
+ * money on the strength of trades that never met a real fill, and that is the
+ * kind of thing a member should not have to go looking for.
+ */
+function SourceBadges({ strategy, t }: { strategy: StrategyView; t: Dictionary }) {
+  const isLive = strategy.masterAccountType === "LIVE";
+  const isDemo = strategy.masterAccountType === "DEMO";
+
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+      {isLive && (
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold"
+          style={{
+            background: "color-mix(in srgb, var(--candle-up) 16%, transparent)",
+            color: "var(--candle-up)",
+          }}
+        >
+          <BadgeCheck className="h-3.5 w-3.5" />
+          {t.browser.sourceLive}
+        </span>
+      )}
+
+      {isDemo && (
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold"
+          style={{ background: "var(--gold-glow)", color: "var(--gold)" }}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          {t.browser.sourceDemo}
+        </span>
+      )}
+
+      {!isLive && !isDemo && (
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+          style={{ border: "1px solid var(--panel-border)", color: "var(--text-muted)" }}
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+          {t.browser.sourceUnknown}
+        </span>
+      )}
+
+      {strategy.masterServer && (
+        <span className="inline-flex items-center gap-1.5 text-muted">
+          <Server className="h-3.5 w-3.5" />
+          <span className="font-mono">{strategy.masterServer}</span>
+          {strategy.masterBroker && <span>· {strategy.masterBroker}</span>}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function describeLot(subscription: SubscriptionView, t: Dictionary): string {
   switch (subscription.lotMode) {
     case "FIXED":
-      return `Fixed ${subscription.fixedLot} lot`;
+      return t.browser.lotFixed.replace("{lot}", String(subscription.fixedLot));
     case "BALANCE_RATIO":
-      return "Proportional to balance";
+      return t.browser.lotBalance;
     case "RISK_PERCENT":
-      return `Risk ${subscription.riskPercent}% per trade`;
+      return t.browser.lotRisk.replace("{percent}", String(subscription.riskPercent));
     default:
-      return `Multiplier ×${subscription.multiplier}`;
+      return t.browser.lotMultiplier.replace("{value}", String(subscription.multiplier));
   }
 }
 

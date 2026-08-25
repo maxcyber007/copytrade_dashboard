@@ -1,20 +1,27 @@
-import { requireUser } from "@/lib/auth/session";
-import { listAccounts } from "@/services/account.service";
+import { requireUser } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { AccountManager } from "@/components/accounts/account-manager";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountsPage() {
-  const user = await requireUser();
-  const accounts = await listAccounts(user.id);
+  await requireUser();
+
+  // The loader reconciles with the trading provider before reading, so the
+  // switches show the provider's actual state rather than only what we last
+  // asked for.
+  const [{ accounts, followerCounts }, t] = await Promise.all([
+    loadPageData("accounts"),
+    getDictionary(),
+  ]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Trading accounts</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.member.accountsTitle}</h1>
         <p className="mt-1 text-sm text-muted">
-          Add your MT4 or MT5 accounts. Passwords are encrypted before storage and are never shown
-          again — not here, not in the API.
+          {t.member.accountsSubtitle}
         </p>
       </div>
 
@@ -27,6 +34,9 @@ export default async function AccountsPage() {
           login: account.login,
           server: account.server,
           accountType: account.accountType,
+          isEnabled: account.isEnabled,
+          providerState: account.providerState,
+          followerCount: followerCounts[account.id] ?? 0,
           currency: account.currency,
           positionMode: account.positionMode,
           connectionStatus: account.connectionStatus,
@@ -35,7 +45,7 @@ export default async function AccountsPage() {
           balance: Number(account.balance),
           equity: Number(account.equity),
           openTrades: account.openTrades,
-          lastSyncAt: account.lastSyncAt ? account.lastSyncAt.toISOString() : null,
+          lastSyncAt: account.lastSyncAt,
         }))}
       />
     </div>

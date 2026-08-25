@@ -1,5 +1,5 @@
-import { getCurrentUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/api-client/auth";
+import { apiGetOrFallback } from "@/lib/api-client/server";
 import { SiteHeader } from "@/components/landing/site-header";
 import { Hero } from "@/components/landing/hero";
 import { Marquee } from "@/components/landing/marquee";
@@ -11,37 +11,31 @@ import { Pricing, type PublicPlan } from "@/components/landing/pricing";
 import { Faq } from "@/components/landing/faq";
 import { FinalCta } from "@/components/landing/cta";
 import { SiteFooter } from "@/components/landing/site-footer";
+import { getDictionary, getLocale } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
-/** Plans come from the database, so the page never advertises a plan that does not exist. */
+/**
+ * Plans come from the database, so the page never advertises one that does not
+ * exist — but the marketing page still has to render if the API is unreachable,
+ * which is why this falls back to an empty list rather than failing the page.
+ */
 async function loadPlans(): Promise<PublicPlan[]> {
-  try {
-    const plans = await prisma.subscriptionPlan.findMany({
-      where: { isActive: true },
-      orderBy: { priceMonthly: "asc" },
-    });
-    return plans.map((plan) => ({
-      tier: plan.tier,
-      name: plan.name,
-      priceMonthly: Number(plan.priceMonthly),
-      currency: plan.currency,
-      maxAccounts: plan.maxAccounts,
-      maxStrategies: plan.maxStrategies,
-      features: plan.features,
-    }));
-  } catch {
-    // The marketing page must render even if the database is unreachable.
-    return [];
-  }
+  const { plans } = await apiGetOrFallback<{ plans: PublicPlan[] }>("/api/page-data/landing", { plans: [] });
+  return plans;
 }
 
 export default async function HomePage() {
-  const [user, plans] = await Promise.all([getCurrentUser(), loadPlans()]);
+  const [user, plans, locale, t] = await Promise.all([
+    getCurrentUser(),
+    loadPlans(),
+    getLocale(),
+    getDictionary(),
+  ]);
 
   return (
     <>
-      <SiteHeader signedIn={Boolean(user)} />
+      <SiteHeader signedIn={Boolean(user)} locale={locale} t={t.nav} />
       <main>
         <Hero />
         <Marquee />

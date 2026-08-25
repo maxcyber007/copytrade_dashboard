@@ -1,13 +1,16 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useT } from "@/components/i18n/locale-provider";
 
 const PROFIT = "#16a34a";
 const LOSS = "#dc2626";
 
 export function DailyProfitChart({ data }: { data: { date: string; profit: number }[] }) {
+  const t = useT();
+
   if (data.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted">No daily results yet.</p>;
+    return <p className="py-8 text-center text-sm text-muted">{t.common.noDailyResults}</p>;
   }
 
   return (
@@ -25,7 +28,7 @@ export function DailyProfitChart({ data }: { data: { date: string; profit: numbe
               borderRadius: 8,
               fontSize: 12,
             }}
-            formatter={(value) => [`$${Number(value ?? 0).toFixed(2)}`, "Profit"]}
+            formatter={(value) => [`$${Number(value ?? 0).toFixed(2)}`, t.common.profit]}
           />
           <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
             {data.map((entry) => (

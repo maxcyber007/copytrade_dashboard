@@ -1,16 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AccountOption, StrategyView } from "./strategy-browser";
-
-const LOT_MODES = [
-  { value: "MULTIPLIER", label: "Multiplier", hint: "Master lot × your multiplier" },
-  { value: "FIXED", label: "Fixed lot", hint: "Always the same lot size" },
-  { value: "BALANCE_RATIO", label: "Balance ratio", hint: "Scaled by your balance vs the master's" },
-  { value: "RISK_PERCENT", label: "Risk percent", hint: "Sized so the stop risks a set % of equity" },
-] as const;
+import { useT } from "@/components/i18n/locale-provider";
+import { apiFetch } from "@/lib/api-client/browser";
 
 export function SubscribeDialog({
   strategy,
@@ -23,7 +19,15 @@ export function SubscribeDialog({
   onClose: () => void;
   onDone: (message: string, tone: "success" | "error") => void;
 }) {
+  const t = useT();
   const connected = accounts.filter((account) => account.connectionStatus === "CONNECTED");
+
+  const lotModes = [
+    { value: "MULTIPLIER", label: t.subscribe.modeMultiplier, hint: t.subscribe.modeMultiplierHint },
+    { value: "FIXED", label: t.subscribe.modeFixed, hint: t.subscribe.modeFixedHint },
+    { value: "BALANCE_RATIO", label: t.subscribe.modeBalance, hint: t.subscribe.modeBalanceHint },
+    { value: "RISK_PERCENT", label: t.subscribe.modeRisk, hint: t.subscribe.modeRiskHint },
+  ];
   const [lotMode, setLotMode] = useState<string>("MULTIPLIER");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +39,7 @@ export function SubscribeDialog({
     const form = new FormData(event.currentTarget);
 
     try {
-      const res = await fetch("/api/copy/subscribe", {
+      const res = await apiFetch("/api/copy/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -69,10 +73,10 @@ export function SubscribeDialog({
       });
 
       const json = (await res.json()) as { ok: boolean; error?: { message: string } };
-      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? "Could not subscribe");
-      onDone(`Subscribed to ${strategy.name}. Start copying when you are ready.`, "success");
+      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? t.subscribe.couldNotSubscribe);
+      onDone(t.subscribe.done.replace("{name}", strategy.name), "success");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not subscribe");
+      setError(err instanceof Error ? err.message : t.subscribe.couldNotSubscribe);
     } finally {
       setSaving(false);
     }
@@ -87,27 +91,26 @@ export function SubscribeDialog({
       <div className="panel my-8 w-full max-w-2xl rounded-2xl p-6">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">Subscribe to {strategy.name}</h2>
+            <h2 className="text-lg font-semibold">{t.subscribe.title.replace("{name}", strategy.name)}</h2>
             <p className="mt-1 text-sm text-muted">
-              These settings are yours. The provider decides what to trade; you decide how much of it
-              reaches your account.
+              {t.subscribe.subtitle}
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-muted transition hover:opacity-70">
+          <button type="button" onClick={onClose} aria-label={t.subscribe.close} className="text-muted transition hover:opacity-70">
             ×
           </button>
         </div>
 
         {connected.length === 0 ? (
           <div className="rounded-lg p-4 text-sm" style={{ background: "var(--bg)" }}>
-            <p className="font-medium">No connected account</p>
+            <p className="font-medium">{t.subscribe.noAccountTitle}</p>
             <p className="mt-1 text-muted">
-              Connect a trading account first — copying into an account we cannot reach would fail on
-              the first trade.
+              {t.subscribe.noAccountBody}
             </p>
             <div className="mt-4">
               <Button variant="secondary" size="sm" onClick={onClose}>
-                Close
+                <X className="h-4 w-4" />
+                {t.subscribe.close}
               </Button>
             </div>
           </div>
@@ -115,7 +118,7 @@ export function SubscribeDialog({
           <form onSubmit={onSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <label htmlFor="accountId" className="block text-sm font-medium">
-                Trading account
+                {t.subscribe.tradingAccount}
               </label>
               <select
                 id="accountId"
@@ -132,9 +135,9 @@ export function SubscribeDialog({
             </div>
 
             <fieldset>
-              <legend className="mb-2 text-sm font-medium">Lot sizing</legend>
+              <legend className="mb-2 text-sm font-medium">{t.subscribe.lotSizing}</legend>
               <div className="grid gap-2 sm:grid-cols-2">
-                {LOT_MODES.map((mode) => (
+                {lotModes.map((mode) => (
                   <label
                     key={mode.value}
                     className="flex cursor-pointer items-start gap-3 rounded-lg p-3 text-sm"
@@ -161,62 +164,62 @@ export function SubscribeDialog({
             </fieldset>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {lotMode === "FIXED" && <Input name="fixedLot" type="number" step="0.01" min="0.01" defaultValue="0.01" label="Fixed lot" />}
+              {lotMode === "FIXED" && <Input name="fixedLot" type="number" step="0.01" min="0.01" defaultValue="0.01" label={t.subscribe.fixedLot} />}
               {lotMode === "MULTIPLIER" && (
-                <Input name="multiplier" type="number" step="0.1" min="0.01" defaultValue="1" label="Multiplier" />
+                <Input name="multiplier" type="number" step="0.1" min="0.01" defaultValue="1" label={t.subscribe.multiplier} />
               )}
               {lotMode === "BALANCE_RATIO" && (
-                <Input name="balanceRatio" type="number" step="0.1" min="0.01" defaultValue="1" label="Balance ratio" />
+                <Input name="balanceRatio" type="number" step="0.1" min="0.01" defaultValue="1" label={t.subscribe.balanceRatio} />
               )}
               {lotMode === "RISK_PERCENT" && (
-                <Input name="riskPercent" type="number" step="0.1" min="0.01" max="20" defaultValue="1" label="Risk % per trade" />
+                <Input name="riskPercent" type="number" step="0.1" min="0.01" max="20" defaultValue="1" label={t.subscribe.riskPercent} />
               )}
-              <Input name="maxOpenTrades" type="number" min="1" max="200" defaultValue="20" label="Max open trades" />
+              <Input name="maxOpenTrades" type="number" min="1" max="200" defaultValue="20" label={t.subscribe.maxOpenTrades} />
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input name="minLot" type="number" step="0.01" min="0.01" defaultValue="0.01" label="Minimum lot" />
-              <Input name="maxLot" type="number" step="0.01" min="0.01" defaultValue="10" label="Maximum lot" />
+              <Input name="minLot" type="number" step="0.01" min="0.01" defaultValue="0.01" label={t.subscribe.minimumLot} />
+              <Input name="maxLot" type="number" step="0.01" min="0.01" defaultValue="10" label={t.subscribe.maximumLot} />
             </div>
 
             <label className="flex items-start gap-3 rounded-lg p-3 text-sm" style={{ background: "var(--bg)" }}>
               <input type="checkbox" name="allowMinLotRounding" className="mt-1" />
               <span>
-                <span className="block font-medium">Round up to the broker minimum</span>
+                <span className="block font-medium">{t.subscribe.roundUpTitle}</span>
                 <span className="block text-xs text-muted">
-                  When your settings size a trade below the smallest lot your broker accepts, take it
-                  at that minimum instead of skipping it. This means more exposure than you
-                  configured, so it is off by default.
+                  {t.subscribe.roundUpHint}
                 </span>
               </span>
             </label>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input name="maxDailyLoss" type="number" min="0" defaultValue="0" label="Max daily loss (0 = off)" />
-              <Input name="maxDrawdownPct" type="number" min="0" max="100" defaultValue="0" label="Max drawdown % (0 = off)" />
+              <Input name="maxDailyLoss" type="number" min="0" defaultValue="0" label={t.subscribe.maxDailyLoss} />
+              <Input name="maxDrawdownPct" type="number" min="0" max="100" defaultValue="0" label={t.subscribe.maxDrawdown} />
             </div>
 
             <Input
               name="allowedSymbols"
-              label="Allowed symbols (optional)"
-              placeholder="XAUUSD, EURUSD — leave empty to allow all"
+              label={t.subscribe.allowedSymbols}
+              placeholder={t.subscribe.allowedSymbolsPlaceholder}
             />
 
             <fieldset className="flex flex-wrap gap-4 text-sm">
-              <Checkbox name="copyBuy" label="Copy buys" defaultChecked />
-              <Checkbox name="copySell" label="Copy sells" defaultChecked />
-              <Checkbox name="copySl" label="Copy stop loss" defaultChecked />
-              <Checkbox name="copyTp" label="Copy take profit" defaultChecked />
+              <Checkbox name="copyBuy" label={t.subscribe.copyBuys} defaultChecked />
+              <Checkbox name="copySell" label={t.subscribe.copySells} defaultChecked />
+              <Checkbox name="copySl" label={t.subscribe.copyStopLoss} defaultChecked />
+              <Checkbox name="copyTp" label={t.subscribe.copyTakeProfit} defaultChecked />
             </fieldset>
 
             {error && <p className="text-sm text-red-500">{error}</p>}
 
             <div className="flex gap-2">
               <Button type="submit" loading={saving}>
-                Subscribe
+                <Check className="h-4 w-4" />
+                {t.subscribe.submit}
               </Button>
               <Button type="button" variant="ghost" onClick={onClose}>
-                Cancel
+                <X className="h-4 w-4" />
+                {t.subscribe.cancel}
               </Button>
             </div>
           </form>

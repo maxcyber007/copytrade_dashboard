@@ -5,20 +5,34 @@ import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Logo } from "./logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
+import type { Locale } from "@/lib/i18n/config";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
-const LINKS = [
-  { href: "#how", label: "How it works" },
-  { href: "#copiers", label: "For copiers" },
-  { href: "#providers", label: "For providers" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#faq", label: "FAQ" },
-];
+type Nav = Dictionary["nav"];
 
-export function SiteHeader({ signedIn }: { signedIn: boolean }) {
+export function SiteHeader({
+  signedIn,
+  locale,
+  t,
+}: {
+  signedIn: boolean;
+  locale: Locale;
+  t: Nav;
+}) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+
+  const links = [
+    { href: "#home", label: t.home },
+    { href: "#how", label: t.how },
+    { href: "#copiers", label: t.copiers },
+    { href: "#providers", label: t.providers },
+    { href: "#pricing", label: t.pricing },
+    { href: "#faq", label: t.faq },
+  ];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -47,8 +61,8 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-7 lg:flex">
-          {LINKS.map((link) => (
+        <nav className="hidden items-center gap-5 lg:flex xl:gap-7">
+          {links.map((link) => (
             <a
               key={link.href}
               href={link.href}
@@ -60,32 +74,33 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
         </nav>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
+          <LanguageSwitcher locale={locale} label={t.language} />
+          <ThemeToggle label={t.toggleTheme} />
           {signedIn ? (
             <Link
               href="/dashboard"
               className="rounded-lg px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
               style={{ background: "linear-gradient(135deg, var(--gold-soft), var(--gold))" }}
             >
-              Dashboard
+              {t.dashboard}
             </Link>
           ) : (
             <>
               <Link href="/login" className="hidden rounded-lg px-3 py-2 text-sm text-muted transition hover:text-gold sm:block">
-                Sign in
+                {t.signIn}
               </Link>
               <Link
                 href="/register"
                 className="rounded-lg px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
                 style={{ background: "linear-gradient(135deg, var(--gold-soft), var(--gold))" }}
               >
-                Get started
+                {t.getStarted}
               </Link>
             </>
           )}
           <button
             type="button"
-            aria-label="Open menu"
+            aria-label={t.openMenu}
             onClick={() => setOpen((v) => !v)}
             className="panel inline-flex h-9 w-9 items-center justify-center rounded-lg lg:hidden"
           >
@@ -97,7 +112,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
       {open && (
         <nav className="panel border-t lg:hidden">
           <div className="mx-auto flex max-w-6xl flex-col px-5 py-2">
-            {LINKS.map((link) => (
+            {links.map((link) => (
               <a
                 key={link.href}
                 href={link.href}

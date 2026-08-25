@@ -15,3 +15,7 @@ export const createAccountSchema = z.object({
 });
 
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
+
+export const setAccountEnabledSchema = z.object({
+  enabled: z.boolean(),
+});

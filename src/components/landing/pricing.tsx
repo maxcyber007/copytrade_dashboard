@@ -3,6 +3,8 @@ import { Check } from "lucide-react";
 import { Reveal } from "./reveal";
 import { Section, SectionHeading } from "./section";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getDictionary } from "@/lib/i18n/server";
+import { plural } from "@/lib/i18n/format";
 
 export type PublicPlan = {
   tier: string;
@@ -16,21 +18,23 @@ export type PublicPlan = {
 
 const HIGHLIGHT = "PRO";
 
-export function Pricing({ plans }: { plans: PublicPlan[] }) {
+export async function Pricing({ plans }: { plans: PublicPlan[] }) {
+  const t = await getDictionary();
+
   return (
     <Section id="pricing">
       <SectionHeading
-        eyebrow="Pricing"
-        title="Start free, upgrade when you add accounts"
-        description="Plans limit how many trading accounts and strategies you run at once. Provider fees are set by each provider and shown before you subscribe."
+        eyebrow={t.pricing.eyebrow}
+        title={t.pricing.title}
+        description={t.pricing.description}
         align="center"
       />
 
       {plans.length === 0 ? (
         <Reveal className="mt-12">
           <EmptyState
-            title="Plans are not published yet"
-            description="Subscription plans appear here once they are configured."
+            title={t.pricing.emptyTitle}
+            description={t.pricing.emptyBody}
           />
         </Reveal>
       ) : (
@@ -48,28 +52,28 @@ export function Pricing({ plans }: { plans: PublicPlan[] }) {
                       className="mb-3 inline-flex w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide"
                       style={{ background: "var(--gold-glow)", color: "var(--gold)" }}
                     >
-                      Most popular
+                      {t.pricing.popular}
                     </span>
                   )}
                   <h3 className="text-base font-semibold">{plan.name}</h3>
                   <p className="mt-3 flex items-baseline gap-1">
                     <span className="text-3xl font-semibold tabular-nums">
-                      {plan.priceMonthly === 0 ? "Free" : `$${plan.priceMonthly}`}
+                      {plan.priceMonthly === 0 ? t.pricing.free : `$${plan.priceMonthly}`}
                     </span>
-                    {plan.priceMonthly > 0 && <span className="text-sm text-muted">/mo</span>}
+                    {plan.priceMonthly > 0 && <span className="text-sm text-muted">{t.pricing.perMonth}</span>}
                   </p>
 
                   <ul className="mt-5 space-y-2.5 text-sm">
                     <li className="flex gap-2.5">
                       <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--gold)" }} />
                       <span className="text-muted">
-                        {plan.maxAccounts} trading {plan.maxAccounts === 1 ? "account" : "accounts"}
+                        {plural(t.pricing.accounts, plan.maxAccounts)}
                       </span>
                     </li>
                     <li className="flex gap-2.5">
                       <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--gold)" }} />
                       <span className="text-muted">
-                        {plan.maxStrategies} {plan.maxStrategies === 1 ? "strategy" : "strategies"} at a time
+                        {plural(t.pricing.strategies, plan.maxStrategies)}
                       </span>
                     </li>
                     {plan.features.map((feature) => (
@@ -89,7 +93,7 @@ export function Pricing({ plans }: { plans: PublicPlan[] }) {
                         : { border: "1px solid var(--panel-border)" }
                     }
                   >
-                    Get started
+                    {t.pricing.cta}
                   </Link>
                 </article>
               </Reveal>

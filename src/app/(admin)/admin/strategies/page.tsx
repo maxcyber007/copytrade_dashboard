@@ -1,21 +1,21 @@
-import { requireAdmin } from "@/lib/auth/session";
-import { listAllStrategies } from "@/services/strategy.service";
+import { requireAdmin } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { StrategyAdmin } from "@/components/admin/strategy-admin";
 import { toNumber } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminStrategiesPage() {
   await requireAdmin();
-  const strategies = await listAllStrategies();
+  const [{ strategies }, t] = await Promise.all([loadPageData("admin/strategies"), getDictionary()]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Strategies</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.admin.strategiesTitle}</h1>
         <p className="mt-1 text-sm text-muted">
-          Create platform strategies and decide which provider strategies go live. Pausing a strategy
-          stops new trades reaching every subscriber immediately.
+          {t.admin.strategiesSubtitle}
         </p>
       </div>
 

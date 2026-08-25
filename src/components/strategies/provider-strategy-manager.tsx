@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Plus, X } from "lucide-react";
 import { Toast } from "@/components/ui/toast";
+import { useT } from "@/components/i18n/locale-provider";
 import { formatPercent } from "@/lib/utils";
-
-type ApiKeyView = { id: string; keyId: string; label: string; lastUsedAt: string | null; createdAt: string };
+import { apiFetch } from "@/lib/api-client/browser";
 
 export type ProviderStrategyView = {
   id: string;
@@ -22,7 +23,6 @@ export type ProviderStrategyView = {
   subscribers: number;
   events: number;
   totalReturnPct: number;
-  keys: ApiKeyView[];
   /** The account the platform publishes from, when there is one. */
   masterAccountId: string | null;
   watchStartedAt: string | null;
@@ -46,16 +46,16 @@ export function ProviderStrategyManager({
   accounts: MasterAccountOption[];
 }) {
   const router = useRouter();
+  const t = useT();
   const [showForm, setShowForm] = useState(strategies.length === 0);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   /** Shown once, right after issuing — the secret cannot be retrieved later. */
-  const [issuedSecret, setIssuedSecret] = useState<{ keyId: string; secret: string } | null>(null);
 
   async function call(url: string, options: RequestInit) {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       headers: options.body ? { "Content-Type": "application/json" } : undefined,
       ...options,
     });
@@ -64,7 +64,7 @@ export function ProviderStrategyManager({
       data?: { key?: { keyId: string; secret: string } };
       error?: { message: string; details?: { path: string; message: string }[] };
     };
-    if (!res.ok || !json.ok) throw json.error ?? { message: "Request failed" };
+    if (!res.ok || !json.ok) throw json.error ?? { message: t.providerStrategies.requestFailed };
     return json;
   }
 
@@ -86,32 +86,16 @@ export function ProviderStrategyManager({
           isPublic: true,
         }),
       });
-      setToast({ message: "Strategy created as a draft — an admin reviews it before it goes live", tone: "success" });
+      setToast({ message: t.providerStrategies.createdDraft, tone: "success" });
       setShowForm(false);
       (event.target as HTMLFormElement).reset();
       router.refresh();
     } catch (error) {
       const err = error as { message?: string; details?: { path: string; message: string }[] };
       if (err.details) setFieldErrors(Object.fromEntries(err.details.map((d) => [d.path, d.message])));
-      setToast({ message: err.message ?? "Could not create the strategy", tone: "error" });
+      setToast({ message: err.message ?? t.providerStrategies.couldNotCreate, tone: "error" });
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function issueKey(strategyId: string) {
-    setBusy(`${strategyId}:key`);
-    try {
-      const json = await call(`/api/provider/strategies/${strategyId}/keys`, {
-        method: "POST",
-        body: JSON.stringify({ label: "Master EA" }),
-      });
-      if (json.data?.key) setIssuedSecret({ keyId: json.data.key.keyId, secret: json.data.key.secret });
-      router.refresh();
-    } catch (error) {
-      setToast({ message: (error as { message?: string }).message ?? "Request failed", tone: "error" });
-    } finally {
-      setBusy(null);
     }
   }
 
@@ -124,27 +108,13 @@ export function ProviderStrategyManager({
       });
       setToast({
         message: accountId
-          ? "Publishing from this account. Trades opened from now on are copied; anything already open is not."
-          : "Stopped publishing from that account",
+          ? t.providerStrategies.publishingStarted
+          : t.providerStrategies.publishingStopped,
         tone: "success",
       });
       router.refresh();
     } catch (error) {
-      setToast({ message: (error as { message?: string }).message ?? "Request failed", tone: "error" });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function revokeKey(keyId: string) {
-    if (!window.confirm("Revoke this key? The master EA using it will stop being accepted immediately.")) return;
-    setBusy(`${keyId}:revoke`);
-    try {
-      await call(`/api/provider/keys/${keyId}`, { method: "DELETE" });
-      setToast({ message: "Key revoked", tone: "success" });
-      router.refresh();
-    } catch (error) {
-      setToast({ message: (error as { message?: string }).message ?? "Request failed", tone: "error" });
+      setToast({ message: (error as { message?: string }).message ?? t.providerStrategies.requestFailed, tone: "error" });
     } finally {
       setBusy(null);
     }
@@ -152,39 +122,18 @@ export function ProviderStrategyManager({
 
   return (
     <div className="space-y-5">
-      {issuedSecret && (
-        <Card className="border-gold">
-          <CardHeader
-            title="Copy this secret now"
-            subtitle="It is shown once and cannot be retrieved again. Losing it means issuing a new key."
-          />
-          <dl className="space-y-2 text-sm">
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">API key</dt>
-              <dd className="mt-1 break-all font-mono text-xs">{issuedSecret.keyId}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">Secret</dt>
-              <dd className="mt-1 break-all font-mono text-xs">{issuedSecret.secret}</dd>
-            </div>
-          </dl>
-          <div className="mt-4">
-            <Button size="sm" variant="secondary" onClick={() => setIssuedSecret(null)}>
-              I have saved it
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {!showForm && <Button onClick={() => setShowForm(true)}>New strategy</Button>}
+      {!showForm && <Button onClick={() => setShowForm(true)}>
+          <Plus className="h-4 w-4" />
+          {t.providerStrategies.newStrategy}
+        </Button>}
 
       {showForm && (
         <Card>
-          <CardHeader title="New strategy" subtitle="Created as a draft. An administrator activates it once reviewed." />
+          <CardHeader title={t.providerStrategies.newStrategy} subtitle={t.providerStrategies.newStrategySubtitle} />
           <form onSubmit={createStrategy} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input name="code" label="Code" required placeholder="GOLD-DESK-01" error={fieldErrors.code} />
-              <Input name="name" label="Name" required placeholder="Gold Desk Intraday" error={fieldErrors.name} />
+              <Input name="code" label={t.providerStrategies.code} required placeholder="GOLD-DESK-01" error={fieldErrors.code} />
+              <Input name="name" label={t.providerStrategies.name} required placeholder="Gold Desk Intraday" error={fieldErrors.name} />
             </div>
             <div className="space-y-1.5">
               <label htmlFor="description" className="block text-sm font-medium">
@@ -194,14 +143,14 @@ export function ProviderStrategyManager({
                 id="description"
                 name="description"
                 rows={3}
-                placeholder="What members are subscribing to: sessions, instruments, risk approach."
+                placeholder={t.providerStrategies.descriptionPlaceholder}
                 className="panel w-full rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500"
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label htmlFor="masterPlatform" className="block text-sm font-medium">
-                  Master platform
+                  {t.providerStrategies.masterPlatform}
                 </label>
                 <select
                   id="masterPlatform"
@@ -212,15 +161,17 @@ export function ProviderStrategyManager({
                   <option value="MT4">MT4</option>
                 </select>
               </div>
-              <Input name="masterAccountCode" label="Master account code" placeholder="MASTER-001" />
+              <Input name="masterAccountCode" label={t.providerStrategies.masterAccountCode} placeholder="MASTER-001" />
             </div>
             <div className="flex gap-2">
               <Button type="submit" loading={saving}>
-                Create strategy
+                <Plus className="h-4 w-4" />
+                {t.providerStrategies.createStrategy}
               </Button>
               {strategies.length > 0 && (
                 <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
-                  Cancel
+                  <X className="h-4 w-4" />
+                  {t.providerStrategies.cancel}
                 </Button>
               )}
             </div>
@@ -229,71 +180,31 @@ export function ProviderStrategyManager({
       )}
 
       {strategies.length === 0 && !showForm ? (
-        <EmptyState title="No strategies yet" description="Create one to start publishing signals." />
+        <EmptyState title={t.providerStrategies.emptyTitle} description={t.providerStrategies.emptyBody} />
       ) : (
         strategies.map((strategy) => (
           <Card key={strategy.id}>
             <CardHeader
               title={strategy.name}
-              subtitle={`${strategy.code} · master on ${strategy.masterPlatform}`}
+              subtitle={`${strategy.code} · ${t.providerStrategies.masterOn} ${strategy.masterPlatform}`}
               action={<StatusBadge status={strategy.status} />}
             />
             {strategy.description && <p className="mb-4 text-sm text-muted">{strategy.description}</p>}
 
             <div className="grid grid-cols-3 gap-3 text-sm">
-              <Metric label="Subscribers" value={String(strategy.subscribers)} />
-              <Metric label="Events received" value={String(strategy.events)} />
-              <Metric label="Return" value={formatPercent(strategy.totalReturnPct)} />
+              <Metric label={t.providerStrategies.subscribers} value={String(strategy.subscribers)} />
+              <Metric label={t.providerStrategies.eventsReceived} value={String(strategy.events)} />
+              <Metric label={t.providerStrategies.returnLabel} value={formatPercent(strategy.totalReturnPct)} />
             </div>
 
             <div className="mt-5">
-              <p className="text-xs uppercase tracking-wide text-muted">Publishing source</p>
+              <p className="text-xs uppercase tracking-wide text-muted">{t.providerStrategies.publishingSource}</p>
               <MasterAccountPicker
                 strategy={strategy}
                 accounts={accounts}
                 busy={busy === `${strategy.id}:master`}
                 onChange={(accountId) => setMasterAccount(strategy.id, accountId)}
               />
-            </div>
-
-            <div className="mt-5">
-              <p className="text-xs uppercase tracking-wide text-muted">Master EA keys</p>
-              {strategy.keys.length === 0 ? (
-                <p className="mt-2 text-sm text-muted">
-                  No active key. Issue one and configure your master EA with it.
-                </p>
-              ) : (
-                <ul className="mt-2 space-y-2">
-                  {strategy.keys.map((key) => (
-                    <li
-                      key={key.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg p-3 text-sm"
-                      style={{ background: "var(--bg)" }}
-                    >
-                      <div className="min-w-0">
-                        <p className="font-mono text-xs break-all">{key.keyId}</p>
-                        <p className="text-xs text-muted">
-                          {key.label} · issued {new Date(key.createdAt).toLocaleDateString()} ·{" "}
-                          {key.lastUsedAt ? `last used ${new Date(key.lastUsedAt).toLocaleString()}` : "never used"}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        loading={busy === `${key.id}:revoke`}
-                        onClick={() => revokeKey(key.id)}
-                      >
-                        Revoke
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="mt-3">
-                <Button size="sm" variant="secondary" loading={busy === `${strategy.id}:key`} onClick={() => issueKey(strategy.id)}>
-                  Issue new key
-                </Button>
-              </div>
             </div>
           </Card>
         ))
@@ -322,14 +233,14 @@ function MasterAccountPicker({
   busy: boolean;
   onChange: (accountId: string | null) => void;
 }) {
+  const t = useT();
   const usable = accounts.filter((account) => account.platform === strategy.masterPlatform);
   const linked = usable.find((account) => account.id === strategy.masterAccountId);
 
   if (usable.length === 0) {
     return (
       <p className="mt-2 text-sm text-muted">
-        No connected {strategy.masterPlatform} account to publish from. Connect one under Trading Accounts,
-        or publish with a master EA using a key below.
+        {t.providerStrategies.noUsableAccount.replace("{platform}", strategy.masterPlatform)}
       </p>
     );
   }
@@ -338,13 +249,13 @@ function MasterAccountPicker({
     <div className="mt-2 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <select
-          aria-label="Publish from"
+          aria-label={t.providerStrategies.publishFrom}
           disabled={busy}
           value={strategy.masterAccountId ?? ""}
           onChange={(event) => onChange(event.target.value === "" ? null : event.target.value)}
           className="panel h-10 rounded-lg px-3 text-sm outline-none focus:border-brand-500"
         >
-          <option value="">A master EA (using a key below)</option>
+          <option value="">{t.providerStrategies.viaMasterEa}</option>
           {usable.map((account) => (
             <option key={account.id} value={account.id}>
               {account.label} · {account.login}
@@ -358,12 +269,18 @@ function MasterAccountPicker({
         <p className="text-xs text-muted">
           {linked.connectionStatus === "CONNECTED"
             ? strategy.watchStartedAt
-              ? `Watching since ${new Date(strategy.watchStartedAt).toLocaleString()}` +
+              ? t.providerStrategies.watchingSince.replace(
+                  "{time}",
+                  new Date(strategy.watchStartedAt).toLocaleString(),
+                ) +
                 (strategy.watchLastPollAt
-                  ? ` · last checked ${new Date(strategy.watchLastPollAt).toLocaleTimeString()}`
+                  ? t.providerStrategies.lastChecked.replace(
+                      "{time}",
+                      new Date(strategy.watchLastPollAt).toLocaleTimeString(),
+                    )
                   : "")
-              : "Watching starts on the next check. Positions already open then are recorded but not copied."
-            : "This account is not connected, so nothing is being published from it."}
+              : t.providerStrategies.watchingStarts
+            : t.providerStrategies.notConnected}
         </p>
       )}
     </div>

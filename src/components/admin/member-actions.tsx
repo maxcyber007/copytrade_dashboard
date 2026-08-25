@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil, Save, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toast } from "@/components/ui/toast";
+import { useT } from "@/components/i18n/locale-provider";
+import { apiFetch } from "@/lib/api-client/browser";
 
 export type AdminMemberRow = {
   id: string;
@@ -25,6 +28,7 @@ type ApiResponse = {
 
 export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSelf: boolean }) {
   const router = useRouter();
+  const t = useT();
   const [mode, setMode] = useState<"idle" | "edit" | "delete">("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,12 +39,12 @@ export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSe
   const locked = member.lockedUntil !== null && new Date(member.lockedUntil) > new Date();
 
   async function call(url: string, options: RequestInit) {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       headers: options.body ? { "Content-Type": "application/json" } : undefined,
       ...options,
     });
     const json = (await res.json().catch(() => ({ ok: false }))) as ApiResponse;
-    if (!res.ok || !json.ok) throw json.error ?? { message: "Request failed" };
+    if (!res.ok || !json.ok) throw json.error ?? { message: t.memberActions.requestFailed };
     return json;
   }
 
@@ -74,11 +78,11 @@ export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSe
           unlock: form.get("unlock") === "on",
         }),
       });
-      setToast({ message: `${member.email} updated`, tone: "success" });
+      setToast({ message: t.memberActions.updated.replace("{email}", member.email), tone: "success" });
       setMode("idle");
       router.refresh();
     } catch (err) {
-      setError((err as { message?: string }).message ?? "Could not update this member");
+      setError((err as { message?: string }).message ?? t.memberActions.couldNotUpdate);
     } finally {
       setBusy(false);
     }
@@ -92,11 +96,11 @@ export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSe
         method: "DELETE",
         body: JSON.stringify({ confirmEmail }),
       });
-      setToast({ message: `${member.email} deleted`, tone: "success" });
+      setToast({ message: t.memberActions.deleted.replace("{email}", member.email), tone: "success" });
       setMode("idle");
       router.refresh();
     } catch (err) {
-      setError((err as { message?: string }).message ?? "Could not delete this member");
+      setError((err as { message?: string }).message ?? t.memberActions.couldNotDelete);
     } finally {
       setBusy(false);
     }
@@ -106,23 +110,25 @@ export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSe
     <>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="secondary" onClick={() => setMode("edit")}>
-          Edit
+          <Pencil className="h-4 w-4" />
+          {t.memberActions.edit}
         </Button>
-        <Button size="sm" variant="danger" disabled={isSelf} onClick={openDelete} title={isSelf ? "You cannot delete your own account" : undefined}>
-          Delete
+        <Button size="sm" variant="danger" disabled={isSelf} onClick={openDelete} title={isSelf ? t.memberActions.cannotDeleteSelf : undefined}>
+          <Trash2 className="h-4 w-4" />
+          {t.memberActions.delete}
         </Button>
       </div>
 
       {mode === "edit" && (
-        <Dialog title={`Edit ${member.email}`} onClose={() => setMode("idle")}>
+        <Dialog title={t.memberActions.editTitle.replace("{email}", member.email)} onClose={() => setMode("idle")}>
           <form onSubmit={save} className="space-y-4">
-            <Input name="name" label="Name" defaultValue={member.name ?? ""} maxLength={80} />
+            <Input name="name" label={t.memberActions.name} defaultValue={member.name ?? ""} maxLength={80} />
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Select name="role" label="Role" defaultValue={member.role} options={["MEMBER", "ADMIN"]} disabled={isSelf} />
+              <Select name="role" label={t.memberActions.role} defaultValue={member.role} options={["MEMBER", "ADMIN"]} disabled={isSelf} />
               <Select
                 name="status"
-                label="Status"
+                label={t.memberActions.status}
                 defaultValue={member.status}
                 options={["ACTIVE", "SUSPENDED", "PENDING_VERIFICATION"]}
                 disabled={isSelf}
@@ -131,7 +137,7 @@ export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSe
 
             {isSelf && (
               <p className="text-xs text-muted">
-                You cannot change your own role or status — ask another administrator.
+                {t.memberActions.selfNote}
               </p>
             )}
 
@@ -139,27 +145,31 @@ export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSe
               <label className="flex items-start gap-3 rounded-lg p-3 text-sm" style={{ background: "var(--bg)" }}>
                 <input type="checkbox" name="unlock" className="mt-1" />
                 <span>
-                  <span className="block font-medium">Clear the login lockout</span>
+                  <span className="block font-medium">{t.memberActions.clearLockout}</span>
                   <span className="block text-xs text-muted">
-                    Locked until {new Date(member.lockedUntil!).toLocaleString()} after repeated failed logins.
+                    {t.memberActions.lockedUntil.replace(
+                      "{time}",
+                      new Date(member.lockedUntil!).toLocaleString(),
+                    )}
                   </span>
                 </span>
               </label>
             )}
 
             <p className="text-xs leading-relaxed text-muted">
-              Suspending revokes this member&apos;s sessions and pauses every subscription immediately,
-              rather than at their next sign-in. Positions already open at their broker stay open.
+              {t.memberActions.suspendNote}
             </p>
 
             {error && <p className="text-sm text-red-500">{error}</p>}
 
             <div className="flex gap-2">
               <Button type="submit" loading={busy}>
-                Save changes
+                <Save className="h-4 w-4" />
+                {t.memberActions.saveChanges}
               </Button>
               <Button type="button" variant="ghost" onClick={() => setMode("idle")}>
-                Cancel
+                <X className="h-4 w-4" />
+                {t.memberActions.cancel}
               </Button>
             </div>
           </form>
@@ -167,18 +177,19 @@ export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSe
       )}
 
       {mode === "delete" && (
-        <Dialog title={`Delete ${member.email}`} onClose={() => setMode("idle")}>
+        <Dialog title={t.memberActions.deleteTitle.replace("{email}", member.email)} onClose={() => setMode("idle")}>
           <div className="space-y-4">
             <div className="rounded-lg p-3 text-sm" style={{ background: "var(--bg)" }}>
-              <p className="font-medium">This cannot be undone.</p>
+              <p className="font-medium">{t.memberActions.cannotBeUndone}</p>
               <p className="mt-1 text-muted">
-                Deleting removes {member.accounts} trading account(s), {member.subscriptions} subscription(s),
-                their copy history and any provider profile. Positions already open at their broker are
-                <span className="font-medium"> not closed</span> — the platform simply loses the ability to
-                act on them.
+                {t.memberActions.deleteBody
+                  .replace("{accounts}", String(member.accounts))
+                  .replace("{subscriptions}", String(member.subscriptions))}
+                <span className="font-medium">{t.memberActions.notClosed}</span>
+                {t.memberActions.deleteBodyTail}
               </p>
               <p className="mt-2 text-muted">
-                Suspending instead keeps the record and stops all activity.
+                {t.memberActions.suspendInstead}
               </p>
             </div>
 
@@ -194,7 +205,7 @@ export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSe
 
             <Input
               name="confirmEmail"
-              label={`Type ${member.email} to confirm`}
+              label={t.memberActions.typeToConfirm.replace("{email}", member.email)}
               value={confirmEmail}
               onChange={(event) => setConfirmEmail(event.target.value)}
               autoComplete="off"
@@ -209,10 +220,12 @@ export function MemberActions({ member, isSelf }: { member: AdminMemberRow; isSe
                 disabled={blockers.length > 0 || confirmEmail.trim().toLowerCase() !== member.email.toLowerCase()}
                 onClick={remove}
               >
-                Delete permanently
+                <Trash2 className="h-4 w-4" />
+                {t.memberActions.deletePermanently}
               </Button>
               <Button variant="ghost" onClick={() => setMode("idle")}>
-                Cancel
+                <X className="h-4 w-4" />
+                {t.memberActions.cancel}
               </Button>
             </div>
           </div>
@@ -233,6 +246,8 @@ function Dialog({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const t = useT();
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
@@ -242,7 +257,7 @@ function Dialog({
       <div className="panel my-10 w-full max-w-lg rounded-2xl p-6 text-left">
         <div className="mb-5 flex items-start justify-between gap-4">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-muted transition hover:opacity-70">
+          <button type="button" onClick={onClose} aria-label={t.memberActions.close} className="text-muted transition hover:opacity-70">
             ×
           </button>
         </div>

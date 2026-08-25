@@ -151,7 +151,10 @@ export interface MetaApiTradingAccount {
   /** `CONNECTED` | `DISCONNECTED` | `DISCONNECTED_FROM_BROKER`. */
   readonly connectionStatus: string;
   deploy(): Promise<void>;
+  undeploy(): Promise<void>;
   waitConnected(timeoutInSeconds?: number, intervalInMilliseconds?: number): Promise<void>;
+  waitDeployed(timeoutInSeconds?: number, intervalInMilliseconds?: number): Promise<void>;
+  waitUndeployed(timeoutInSeconds?: number, intervalInMilliseconds?: number): Promise<void>;
   getRPCConnection(): MetaApiRpcConnection;
 }
 

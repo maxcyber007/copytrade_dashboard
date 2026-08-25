@@ -197,6 +197,10 @@ model User {
   status        UserStatus @default(ACTIVE)
   emailVerified DateTime?
 
+  /// Set whenever the avatar changes. Kept on User so "has an avatar" and the
+  /// cache-busting version are answerable without loading the image bytes.
+  avatarUpdatedAt DateTime?
+
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
@@ -217,6 +221,7 @@ model User {
   providerProfile     ProviderProfile?     @relation("ProviderOwner")
   reviewedProviders   ProviderProfile[]    @relation("ProviderReviewer")
   passwordResetTokens PasswordResetToken[]
+  avatar              UserAvatar?
 
   @@index([role])
   @@index([status])
@@ -237,6 +242,36 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// Avatar image bytes, in their own table so a User lookup never loads them.
+/// Stored in the database rather than on disk because the app container has no
+/// persistent volume — a file written at runtime would not survive a redeploy.
+model UserAvatar {
+  userId      String   @id
+  data        Bytes
+  contentType String
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Periodic snapshot of the MetaApi billing balance.
+///
+/// MetaApi exposes the current balance but nothing about consumption, so burn
+/// rate and remaining runway are derived here by comparing snapshots over
+/// time. Measured rather than assumed: no per-account price is hard-coded.
+model MetaApiBalanceSnapshot {
+  id               String   @id @default(cuid())
+  amount           Decimal  @db.Decimal(18, 8)
+  trialAmount      Decimal  @default(0) @db.Decimal(18, 8)
+  advanceAmount    Decimal  @default(0) @db.Decimal(18, 8)
+  /// Accounts reported as deployed at the moment of the snapshot — what
+  /// MetaApi actually bills for.
+  deployedAccounts Int      @default(0)
+  recordedAt       DateTime @default(now())
+
+  @@index([recordedAt])
 }
 
 model Session {
@@ -287,10 +322,25 @@ model TradingAccount {
   encryptedPassword String? // AES-256-GCM payload (iv:tag:ciphertext), base64
   encryptedInvestor String?
 
+  /// A disabled account is undeployed at the provider and cannot connect,
+  /// sync or copy. Kept instead of deleting the row so the provider-side
+  /// account is never orphaned — see docs on account removal.
+  isEnabled Boolean @default(true)
+
+  /// What the provider last reported about this account: DEPLOYED,
+  /// UNDEPLOYED, DEPLOYING, UNDEPLOYING or UNKNOWN. Cached because it is the
+  /// provider's truth, not ours — `isEnabled` is only what the member asked
+  /// for, and the two can disagree if a call failed or someone changed it in
+  /// the provider's own dashboard.
+  providerState   String?
+  providerStateAt DateTime?
+
   connectionStatus ConnectionStatus @default(DISCONNECTED)
   copyStatus       CopyStatus       @default(IDLE)
   lastError        String?
-  /** Error code behind lastError, so a retry can be refused on its merits. */
+  /**
+   * Error code behind lastError, so a retry can be refused on its merits.
+   */
   lastErrorCode    String?
   lastSyncAt       DateTime?
   connectedAt      DateTime?
@@ -318,6 +368,7 @@ model TradingAccount {
   @@unique([userId, login, server])
   @@index([userId])
   @@index([platform])
+  @@index([isEnabled])
   @@index([connectionStatus])
   @@index([copyStatus])
   @@index([accountRole])
@@ -776,9 +827,9 @@ model PositionMapping {
   /// Filled from the broker's own deal records once the position ends. Null
   /// where the broker has reported nothing: a history shows no figure rather
   /// than one this platform inferred.
-  closePrice  Decimal?    @db.Decimal(18, 5)
+  closePrice  Decimal?     @db.Decimal(18, 5)
   /// Realised profit including commission and swap.
-  profit      Decimal?    @db.Decimal(18, 2)
+  profit      Decimal?     @db.Decimal(18, 2)
   closeReason CloseReason?
 
   openedAt DateTime  @default(now())

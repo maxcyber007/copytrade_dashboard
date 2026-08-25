@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { isResetTokenValid } from "@/services/password-reset.service";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { ResetPasswordForm } from "@/components/forms/reset-password-form";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,18 +11,18 @@ export default async function ResetPasswordPage({
   searchParams: Promise<{ token?: string }>;
 }) {
   const { token } = await searchParams;
-  const valid = Boolean(token && token.length >= 20 && (await isResetTokenValid(token)));
+  const t = await getDictionary();
+  const { valid } = await loadPageData("reset-password", { token });
 
   if (!valid) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight">This link is no longer valid</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.auth.invalidTitle}</h1>
         <p className="text-sm text-muted">
-          Reset links can be used once and expire quickly. Request a new one and it will arrive in a
-          moment.
+          {t.auth.invalidBody}
         </p>
         <Link href="/forgot-password" className="text-sm text-gold hover:underline">
-          Send a new link
+          {t.auth.sendNewLink}
         </Link>
       </div>
     );
@@ -30,9 +31,9 @@ export default async function ResetPasswordPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Choose a new password</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.auth.resetTitle}</h1>
         <p className="mt-1 text-sm text-muted">
-          Setting it signs you out everywhere, so any other session ends immediately.
+          {t.auth.resetSubtitle}
         </p>
       </div>
       <ResetPasswordForm token={token!} />

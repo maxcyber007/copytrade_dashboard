@@ -1,18 +1,19 @@
-import { requireAdmin } from "@/lib/auth/session";
-import { copyTradeRepository } from "@/repositories/copy-trade.repository";
+import { requireAdmin } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { Table, Td, Th } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { toNumber } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCopyTradesPage() {
   await requireAdmin();
-  const [trades, counts] = await Promise.all([
-    copyTradeRepository.listForAdmin(),
-    copyTradeRepository.countByStatus(),
+  const [{ trades, counts }, t] = await Promise.all([
+    loadPageData("admin/copy-trades"),
+    getDictionary(),
   ]);
 
   const byStatus = Object.fromEntries(counts.map((row) => [row.status, row._count]));
@@ -20,9 +21,9 @@ export default async function AdminCopyTradesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Copy trades</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.admin.copyTradesTitle}</h1>
         <p className="text-sm text-muted">
-          Every attempt across the platform, including the technical error codes members do not see.
+          {t.admin.copyTradesSubtitle}
         </p>
       </div>
 
@@ -39,24 +40,24 @@ export default async function AdminCopyTradesPage() {
 
       {trades.length === 0 ? (
         <EmptyState
-          title="No copy attempts recorded"
-          description="Attempts appear here once the copy engine processes master trade events."
+          title={t.admin.noCopyAttempts}
+          description={t.admin.noCopyAttemptsBody}
         />
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>Date</Th>
-              <Th>Member</Th>
-              <Th>Strategy</Th>
-              <Th>Symbol</Th>
-              <Th>Event</Th>
-              <Th className="text-right">Master / member lot</Th>
-              <Th>Master ticket</Th>
-              <Th>Member ticket</Th>
-              <Th>Status</Th>
-              <Th>Error</Th>
-              <Th className="text-right">Attempts</Th>
+              <Th>{t.admin.thDate}</Th>
+              <Th>{t.admin.thMember}</Th>
+              <Th>{t.admin.thStrategy}</Th>
+              <Th>{t.admin.thSymbol}</Th>
+              <Th>{t.admin.thEvent}</Th>
+              <Th className="text-right">{t.admin.thLots}</Th>
+              <Th>{t.admin.thMasterTicket}</Th>
+              <Th>{t.admin.thMemberTicket}</Th>
+              <Th>{t.admin.thStatus}</Th>
+              <Th>{t.admin.thError}</Th>
+              <Th className="text-right">{t.admin.thAttempts}</Th>
             </tr>
           </thead>
           <tbody>

@@ -1,24 +1,25 @@
-import { requireUser } from "@/lib/auth/session";
-import { copyTradeRepository } from "@/repositories/copy-trade.repository";
+import { requireUser } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { Table, Td, Th } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, toNumber } from "@/lib/utils";
 import { LiveUpdates } from "@/components/live/live-updates";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function HistoryPage() {
   const user = await requireUser();
-  const trades = await copyTradeRepository.listForUser(user.id, { take: 100 });
+  const [{ trades }, t] = await Promise.all([loadPageData("history"), getDictionary()]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Copy history</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t.member.historyTitle}</h1>
           <p className="mt-1 text-sm text-muted">
-            Every copy attempt, successful or not, with the lots and prices on both sides.
+            {t.member.historySubtitle}
           </p>
         </div>
         <LiveUpdates showToasts={false} />
@@ -26,24 +27,24 @@ export default async function HistoryPage() {
 
       {trades.length === 0 ? (
         <EmptyState
-          title="No copied trades yet"
-          description="Once a strategy you follow opens a trade, every attempt appears here with its status, latency and any error."
+          title={t.member.historyEmptyTitle}
+          description={t.member.historyEmptyBody}
         />
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>Date</Th>
-              <Th>Strategy</Th>
-              <Th>Account</Th>
-              <Th>Symbol</Th>
-              <Th>Event</Th>
-              <Th>Type</Th>
-              <Th className="text-right">Master lot</Th>
-              <Th className="text-right">Your lot</Th>
-              <Th className="text-right">Profit</Th>
-              <Th>Status</Th>
-              <Th className="text-right">Latency</Th>
+              <Th>{t.member.thDate}</Th>
+              <Th>{t.member.thStrategy}</Th>
+              <Th>{t.member.thAccount}</Th>
+              <Th>{t.member.thSymbol}</Th>
+              <Th>{t.member.thEvent}</Th>
+              <Th>{t.member.thType}</Th>
+              <Th className="text-right">{t.member.thMasterLot}</Th>
+              <Th className="text-right">{t.member.thYourLot}</Th>
+              <Th className="text-right">{t.member.thProfit}</Th>
+              <Th>{t.member.thStatus}</Th>
+              <Th className="text-right">{t.member.thLatency}</Th>
             </tr>
           </thead>
           <tbody>
@@ -55,7 +56,7 @@ export default async function HistoryPage() {
                 <Td>
                   {trade.memberSymbol}
                   {trade.masterSymbol !== trade.memberSymbol && (
-                    <span className="block text-xs text-muted">master: {trade.masterSymbol}</span>
+                    <span className="block text-xs text-muted">{t.member.masterPrefix} {trade.masterSymbol}</span>
                   )}
                 </Td>
                 <Td className="text-xs">{trade.eventType}</Td>

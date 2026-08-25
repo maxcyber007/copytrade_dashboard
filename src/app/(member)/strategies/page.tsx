@@ -1,26 +1,24 @@
-import { requireUser } from "@/lib/auth/session";
-import { listPublicStrategies } from "@/services/strategy.service";
-import { listAccounts } from "@/services/account.service";
-import { listSubscriptions } from "@/services/copy.service";
+import { requireUser } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { StrategyBrowser } from "@/components/strategies/strategy-browser";
 import { toNumber } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function StrategiesPage() {
   const user = await requireUser();
-  const [strategies, accounts, subscriptions] = await Promise.all([
-    listPublicStrategies(),
-    listAccounts(user.id),
-    listSubscriptions(user.id),
+  const [{ strategies, accounts, subscriptions }, t] = await Promise.all([
+    loadPageData("strategies"),
+    getDictionary(),
   ]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Strategies</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.member.strategiesTitle}</h1>
         <p className="mt-1 text-sm text-muted">
-          Subscribe an account to a strategy and set how much of each trade reaches you.
+          {t.member.strategiesSubtitle}
         </p>
       </div>
 
@@ -41,6 +39,9 @@ export default async function StrategiesPage() {
           winRatePct: toNumber(strategy.winRatePct),
           totalTrades: strategy.totalTrades,
           memberCount: strategy.memberCount,
+          masterAccountType: strategy.masterAccount?.accountType ?? null,
+          masterBroker: strategy.masterAccount?.broker ?? null,
+          masterServer: strategy.masterAccount?.server ?? null,
         }))}
         accounts={accounts.map((account) => ({
           id: account.id,

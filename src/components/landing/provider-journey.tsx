@@ -1,42 +1,26 @@
 import { Reveal } from "./reveal";
 import { Section, SectionHeading } from "./section";
+import { getDictionary } from "@/lib/i18n/server";
 
-const STAGES = [
-  {
-    title: "Apply",
-    body: "Tell us who you trade for, how the strategy works, and what you want to charge. Takes a few minutes.",
-  },
-  {
-    title: "Get reviewed",
-    body: "An admin reviews every application. You are told the outcome and, if it is not approved, exactly why — and you can reapply.",
-  },
-  {
-    title: "Connect your master account",
-    body: "Register the MT4 or MT5 account you trade from. Each strategy gets its own signed key for its master EA.",
-  },
-  {
-    title: "Publish and earn",
-    body: "Your strategy appears in the marketplace. Members subscribe with their own risk settings; your fee applies to each of them.",
-  },
-];
+export async function ProviderJourney() {
+  const t = await getDictionary();
 
-export function ProviderJourney() {
   return (
     <Section>
       <SectionHeading
-        eyebrow="Provider program"
+        eyebrow={t.journey.eyebrow}
         title={
           <>
-            From application to <span className="gold-text">first subscriber</span>
+            {t.journey.titleLead} <span className="gold-text">{t.journey.titleAccent}</span>
           </>
         }
-        description="Providers keep full control of their strategy. The platform handles distribution, risk enforcement on the copier side, execution and record keeping."
+        description={t.journey.description}
       />
 
       <div className="relative mt-12">
         <div className="gold-rule absolute left-0 right-0 top-6 hidden h-px lg:block" aria-hidden="true" />
         <ol className="grid gap-6 lg:grid-cols-4">
-          {STAGES.map((stage, index) => (
+          {t.journey.stages.map((stage, index) => (
             <Reveal as="li" key={stage.title} delay={index * 110}>
               <div className="relative">
                 <span

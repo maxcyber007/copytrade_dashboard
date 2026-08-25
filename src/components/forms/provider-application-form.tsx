@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { useT } from "@/components/i18n/locale-provider";
+import { apiFetch } from "@/lib/api-client/browser";
 
 type ApiResponse = {
   ok: boolean;
@@ -13,6 +16,7 @@ type ApiResponse = {
 
 export function ProviderApplicationForm({ reapplying = false }: { reapplying?: boolean }) {
   const router = useRouter();
+  const t = useT();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -36,7 +40,7 @@ export function ProviderApplicationForm({ reapplying = false }: { reapplying?: b
     };
 
     try {
-      const res = await fetch("/api/provider/apply", {
+      const res = await apiFetch("/api/provider/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -44,7 +48,7 @@ export function ProviderApplicationForm({ reapplying = false }: { reapplying?: b
       const json = (await res.json()) as ApiResponse;
 
       if (!res.ok || !json.ok) {
-        setError(json.error?.message ?? "Request failed");
+        setError(json.error?.message ?? t.auth.requestFailed);
         if (json.error?.details) {
           setFieldErrors(Object.fromEntries(json.error.details.map((d) => [d.path, d.message])));
         }
@@ -53,7 +57,7 @@ export function ProviderApplicationForm({ reapplying = false }: { reapplying?: b
 
       router.refresh();
     } catch {
-      setError("Network error. Please try again.");
+      setError(t.auth.networkError);
     } finally {
       setLoading(false);
     }
@@ -64,24 +68,24 @@ export function ProviderApplicationForm({ reapplying = false }: { reapplying?: b
       <form onSubmit={onSubmit} className="space-y-5">
         <Input
           name="displayName"
-          label="Display name"
+          label={t.provider.displayName}
           required
           maxLength={40}
-          placeholder="Gold Desk Capital"
+          placeholder={t.provider.displayNamePlaceholder}
           error={fieldErrors.displayName}
         />
         <Input
           name="headline"
-          label="Headline"
+          label={t.provider.headline}
           required
           maxLength={120}
-          placeholder="Intraday gold scalping with fixed stops"
+          placeholder={t.provider.headlinePlaceholder}
           error={fieldErrors.headline}
         />
 
         <div className="space-y-1.5">
           <label htmlFor="bio" className="block text-sm font-medium">
-            About your strategy
+            {t.provider.about}
           </label>
           <textarea
             id="bio"
@@ -90,20 +94,20 @@ export function ProviderApplicationForm({ reapplying = false }: { reapplying?: b
             rows={5}
             minLength={50}
             maxLength={2000}
-            placeholder="How the strategy works, which sessions it trades, typical holding time, how you manage risk."
+            placeholder={t.provider.aboutPlaceholder}
             className="panel w-full rounded-lg px-3 py-2 text-sm outline-none transition placeholder:text-muted focus:border-brand-500"
           />
           {fieldErrors.bio && <p className="text-xs text-red-500">{fieldErrors.bio}</p>}
-          <p className="text-xs text-muted">At least 50 characters. Members read this before subscribing.</p>
+          <p className="text-xs text-muted">{t.provider.aboutHint}</p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Input name="website" type="url" label="Website (optional)" placeholder="https://" error={fieldErrors.website} />
-          <Input name="country" label="Country code (optional)" maxLength={2} placeholder="TH" error={fieldErrors.country} />
+          <Input name="website" type="url" label={t.provider.website} placeholder="https://" error={fieldErrors.website} />
+          <Input name="country" label={t.provider.country} maxLength={2} placeholder="TH" error={fieldErrors.country} />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <Input name="yearsTrading" type="number" min={0} max={60} label="Years trading" error={fieldErrors.yearsTrading} />
+          <Input name="yearsTrading" type="number" min={0} max={60} label={t.provider.yearsTrading} error={fieldErrors.yearsTrading} />
           <Input
             name="performanceFeePct"
             type="number"
@@ -111,7 +115,7 @@ export function ProviderApplicationForm({ reapplying = false }: { reapplying?: b
             max={50}
             step="0.5"
             defaultValue={0}
-            label="Performance fee %"
+            label={t.provider.performanceFee}
             error={fieldErrors.performanceFeePct}
           />
           <Input
@@ -120,20 +124,20 @@ export function ProviderApplicationForm({ reapplying = false }: { reapplying?: b
             min={0}
             step="1"
             defaultValue={0}
-            label="Monthly price (USD)"
+            label={t.provider.monthlyPrice}
             error={fieldErrors.subscriptionPriceMonthly}
           />
         </div>
 
         <p className="text-xs leading-relaxed text-muted">
-          Leave both at zero to publish for free. Terms are shown to members before they subscribe,
-          and can be changed later while you have no active subscribers.
+          {t.provider.feesNote}
         </p>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
         <Button type="submit" loading={loading}>
-          {reapplying ? "Submit new application" : "Submit application"}
+          <Send className="h-4 w-4" />
+          {reapplying ? t.provider.submitNew : t.provider.submit}
         </Button>
       </form>
     </Card>

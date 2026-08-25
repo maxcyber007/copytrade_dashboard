@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const PAGE_SIZES = [25, 50, 100, 200] as const;
 export type PageSize = (typeof PAGE_SIZES)[number];
@@ -34,7 +35,7 @@ export function paginate<T>(rows: T[], page: number, size: number): T[] {
  * Links rather than a client component: the page is server-rendered, so a
  * choice is a URL — shareable, bookmarkable, and surviving a reload.
  */
-export function Pagination({
+export async function Pagination({
   total,
   page,
   size,
@@ -46,6 +47,7 @@ export function Pagination({
   /** Builds the URL for a given page and size, keeping the other filters. */
   hrefFor: (params: { page: number; size: number }) => string;
 }) {
+  const t = await getDictionary();
   const pages = Math.max(1, Math.ceil(total / size));
   const first = total === 0 ? 0 : (page - 1) * size + 1;
   const last = Math.min(page * size, total);
@@ -53,12 +55,17 @@ export function Pagination({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-sm text-muted">
-        {total === 0 ? "Nothing to show" : `Showing ${first}–${last} of ${total}`}
+        {total === 0
+          ? t.common.nothingToShow
+          : t.common.showingRange
+              .replace("{first}", String(first))
+              .replace("{last}", String(last))
+              .replace("{total}", String(total))}
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs uppercase tracking-wide text-muted">Rows</span>
+          <span className="text-xs uppercase tracking-wide text-muted">{t.common.rows}</span>
           {PAGE_SIZES.map((option) => (
             <Link
               key={option}
@@ -77,11 +84,11 @@ export function Pagination({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <PageLink href={hrefFor({ page: page - 1, size })} disabled={page <= 1} label="Previous" />
+          <PageLink href={hrefFor({ page: page - 1, size })} disabled={page <= 1} label={t.common.previous} />
           <span className="px-1 text-sm tabular-nums text-muted">
             {page} / {pages}
           </span>
-          <PageLink href={hrefFor({ page: page + 1, size })} disabled={page >= pages} label="Next" />
+          <PageLink href={hrefFor({ page: page + 1, size })} disabled={page >= pages} label={t.common.next} />
         </div>
       </div>
     </div>

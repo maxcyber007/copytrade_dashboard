@@ -20,3 +20,18 @@ export const toNumber = (value: unknown): number => {
   }
   return Number(value);
 };
+
+/**
+ * Timestamps, formatted the same way everywhere.
+ *
+ * Dates now arrive as ISO strings, and `toLocaleString()` would render them in
+ * whichever timezone and locale the renderer happens to have — which differs
+ * between the server and the visitor's browser, and is precisely what React
+ * reports as a hydration mismatch. Slicing the ISO string instead gives one
+ * answer, on both sides, in UTC.
+ */
+export const formatDateTime = (iso: string | null | undefined): string | null =>
+  iso ? `${iso.slice(0, 10)} ${iso.slice(11, 16)}` : null;
+
+export const formatDate = (iso: string | null | undefined): string | null =>
+  iso ? iso.slice(0, 10) : null;

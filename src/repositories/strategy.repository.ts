@@ -18,6 +18,15 @@ export const publicStrategySelect = {
   memberCount: true,
   createdAt: true,
   provider: { select: { displayName: true, slug: true, performanceFeePct: true, subscriptionPriceMonthly: true } },
+  /**
+   * The account the strategy publishes from.
+   *
+   * Deliberately narrow: whether the source is a real or demo account is
+   * something a member needs before risking money on it, and the broker and
+   * server say which venue the fills come from. The login, credentials and
+   * balances stay out — they are the provider's, and nothing here needs them.
+   */
+  masterAccount: { select: { accountType: true, broker: true, server: true, platform: true } },
 } satisfies Prisma.StrategySelect;
 
 export const strategyRepository = {

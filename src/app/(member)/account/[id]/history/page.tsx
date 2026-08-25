@@ -1,25 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
-import { getAccount } from "@/services/account.service";
-import { getAccountTradeHistory } from "@/services/trade-history.service";
+import { requireUser } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { Table, Td, Th } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatLot, toNumber } from "@/lib/utils";
 import { Pagination, paginate, parsePage, parsePageSize } from "@/components/ui/pagination";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 const RANGES = [7, 30, 90] as const;
-
-/** How a close is described to the member, rather than by the broker's code. */
-const CLOSE_REASON_LABEL: Record<string, string> = {
-  STOP_LOSS: "Stop loss",
-  TAKE_PROFIT: "Take profit",
-  COPIED_CLOSE: "Closed by strategy",
-  MANUAL: "Closed manually",
-  OTHER: "Closed at broker",
-};
 
 /**
  * Prices, at the precision the instrument actually uses.
@@ -43,15 +34,22 @@ export default async function AccountHistoryPage({
 }) {
   const { id } = await params;
   const { days: daysParam, size: sizeParam, page: pageParam } = await searchParams;
-  const user = await requireUser();
+  await requireUser();
+  const t = await getDictionary();
 
-  // getAccount scopes to the owner, so another member's id is a 404 rather
-  // than someone else's trading history.
-  const account = await getAccount(id, user.id);
-  if (!account) notFound();
+  /** How a close is described to the member, rather than by the broker's code. */
+  const closeReasonLabel: Record<string, string> = {
+    STOP_LOSS: t.tradeHistory.reasonStopLoss,
+    TAKE_PROFIT: t.tradeHistory.reasonTakeProfit,
+    COPIED_CLOSE: t.tradeHistory.reasonCopiedClose,
+    MANUAL: t.tradeHistory.reasonManual,
+    OTHER: t.tradeHistory.reasonOther,
+  };
 
-  const days = RANGES.includes(Number(daysParam) as (typeof RANGES)[number]) ? Number(daysParam) : 30;
-  const history = await getAccountTradeHistory(id, user.id, { days });
+  // The loader scopes the account to its owner, so another member's id comes
+  // back empty here and becomes a 404 — never someone else's trading history.
+  const { account, history, days } = await loadPageData("account-history", { id, days: daysParam });
+  if (!account || !history) notFound();
 
   const settled = history.totals.wins + history.totals.losses;
 
@@ -73,12 +71,12 @@ export default async function AccountHistoryPage({
     <div className="space-y-6">
       <div>
         <Link href="/account" className="text-sm text-muted hover:underline">
-          ← Trading accounts
+          {t.tradeHistory.back}
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{account.label} — trade history</h1>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t.tradeHistory.title.replace("{label}", account.label)}</h1>
         <p className="mt-1 text-sm text-muted">
-          {account.platform} · {account.broker} · {account.login} @ {account.server} — every trade on this
-          account, whether the platform copied it or you placed it yourself.
+          {account.platform} · {account.broker} · {account.login} @ {account.server}{" "}
+          {t.tradeHistory.subtitle}
         </p>
       </div>
 
@@ -94,7 +92,7 @@ export default async function AccountHistoryPage({
             }`}
             style={range === days ? undefined : { borderColor: "var(--panel-border)" }}
           >
-            Last {range} days
+            {t.tradeHistory.lastDays.replace("{days}", String(range))}
           </Link>
         ))}
       </div>
@@ -105,7 +103,7 @@ export default async function AccountHistoryPage({
           className="rounded-xl border px-4 py-3 text-sm text-muted"
           style={{ borderColor: "var(--panel-border)" }}
         >
-          Showing only what the platform copied — {history.brokerUnavailable}
+          {t.tradeHistory.brokerUnavailable} {history.brokerUnavailable}
         </div>
       )}
 
@@ -116,44 +114,52 @@ export default async function AccountHistoryPage({
           className="rounded-xl border px-4 py-3 text-sm"
           style={{ borderColor: "var(--gold-line)" }}
         >
-          The broker is still loading this account&apos;s history, so this list may be incomplete. It fills in
-          within a few minutes of connecting — reload then.
+          {t.tradeHistory.synchronizing}
         </div>
       )}
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <Stat label="Trades" value={String(history.rows.length)} note={`over ${days} days`} />
-        <Stat label="Closed volume" value={`${formatLot(history.totals.volume)} lots`} />
+        <Stat label={t.tradeHistory.trades}
+          value={String(history.rows.length)}
+          note={t.tradeHistory.overDays.replace("{days}", String(days))} />
+        <Stat label={t.tradeHistory.closedVolume}
+          value={`${formatLot(history.totals.volume)} ${t.tradeHistory.lots}`} />
         <Stat
-          label="Net profit"
+          label={t.tradeHistory.netProfit}
           value={settled === 0 ? "—" : formatCurrency(history.totals.profit, account.currency)}
           tone={settled === 0 ? undefined : history.totals.profit >= 0 ? "up" : "down"}
         />
         <Stat
-          label="Win rate"
+          label={t.tradeHistory.winRate}
           value={settled === 0 ? "—" : `${((history.totals.wins / settled) * 100).toFixed(1)}%`}
-          note={settled === 0 ? undefined : `${history.totals.wins}W / ${history.totals.losses}L`}
+          note={
+            settled === 0
+              ? undefined
+              : t.tradeHistory.winLoss
+                  .replace("{wins}", String(history.totals.wins))
+                  .replace("{losses}", String(history.totals.losses))
+          }
         />
       </div>
 
       {history.rows.length === 0 ? (
         <EmptyState
-          title="No trades in this period"
-          description="Trades on this account appear here — copied and manual alike — with what each one opened at, closed at, and made or lost."
+          title={t.tradeHistory.emptyTitle}
+          description={t.tradeHistory.emptyBody}
         />
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>Closed</Th>
-              <Th>Source</Th>
-              <Th>Symbol</Th>
-              <Th>Type</Th>
-              <Th className="text-right">Lot</Th>
-              <Th className="text-right">Entry</Th>
-              <Th className="text-right">Exit</Th>
-              <Th className="text-right">Profit</Th>
-              <Th>Ticket</Th>
+              <Th>{t.tradeHistory.thClosed}</Th>
+              <Th>{t.tradeHistory.thSource}</Th>
+              <Th>{t.tradeHistory.thSymbol}</Th>
+              <Th>{t.tradeHistory.thType}</Th>
+              <Th className="text-right">{t.tradeHistory.thLot}</Th>
+              <Th className="text-right">{t.tradeHistory.thEntry}</Th>
+              <Th className="text-right">{t.tradeHistory.thExit}</Th>
+              <Th className="text-right">{t.tradeHistory.thProfit}</Th>
+              <Th>{t.tradeHistory.thTicket}</Th>
             </tr>
           </thead>
           <tbody>
@@ -164,11 +170,11 @@ export default async function AccountHistoryPage({
                     <>
                       {row.closedAt.toLocaleString()}
                       {row.reason && (
-                        <span className="block text-muted">{CLOSE_REASON_LABEL[row.reason] ?? row.reason}</span>
+                        <span className="block text-muted">{closeReasonLabel[row.reason] ?? row.reason}</span>
                       )}
                     </>
                   ) : (
-                    <span className="text-gold">Still open</span>
+                    <span className="text-gold">{t.tradeHistory.stillOpen}</span>
                   )}
                 </Td>
                 <Td className="text-xs">
@@ -176,11 +182,11 @@ export default async function AccountHistoryPage({
                       simply theirs, and saying which is which matters. */}
                   {row.copied ? (
                     <>
-                      <span className="text-gold">Copied</span>
+                      <span className="text-gold">{t.tradeHistory.copied}</span>
                       {row.strategyName && <span className="block text-muted">{row.strategyName}</span>}
                     </>
                   ) : (
-                    <span className="text-muted">Your own trade</span>
+                    <span className="text-muted">{t.tradeHistory.ownTrade}</span>
                   )}
                 </Td>
                 <Td>{row.symbol}</Td>

@@ -1,20 +1,23 @@
 import Link from "next/link";
 import { ForgotPasswordForm } from "@/components/forms/forgot-password-form";
+import { getDictionary } from "@/lib/i18n/server";
 
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage() {
+  const t = await getDictionary();
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Reset your password</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.auth.forgotTitle}</h1>
         <p className="mt-1 text-sm text-muted">
-          Enter your email and we will send a link to choose a new password.
+          {t.auth.forgotSubtitle}
         </p>
       </div>
       <ForgotPasswordForm />
       <p className="text-sm text-muted">
-        Remembered it?{" "}
+        {t.auth.remembered}{" "}
         <Link href="/login" className="text-gold hover:underline">
-          Sign in
+          {t.auth.signIn}
         </Link>
       </p>
     </div>

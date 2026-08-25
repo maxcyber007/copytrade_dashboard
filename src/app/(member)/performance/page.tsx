@@ -1,24 +1,26 @@
-import { requireUser } from "@/lib/auth/session";
-import { getMemberPerformance } from "@/services/dashboard.service";
+import { requireUser } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DailyProfitChart } from "@/components/charts/daily-profit-chart";
 import { formatCurrency, formatPercent } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
 export const dynamic = "force-dynamic";
 
 export default async function PerformancePage() {
   const user = await requireUser();
-  const performance = await getMemberPerformance(user.id);
+  const [{ performance }, t] = await Promise.all([loadPageData("performance"), getDictionary()]);
 
   if (performance.totalTrades === 0) {
     return (
       <div className="space-y-6">
-        <Header />
+        <Header t={t} />
         <EmptyState
-          title="No performance data yet"
-          description="These figures are computed from your own copied trades. They appear once a strategy you follow has traded."
+          title={t.perf.emptyTitle}
+          description={t.perf.emptyBody}
         />
       </div>
     );
@@ -26,44 +28,44 @@ export default async function PerformancePage() {
 
   return (
     <div className="space-y-6">
-      <Header />
+      <Header t={t} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Total profit"
+          label={t.perf.totalProfit}
           value={formatCurrency(performance.totalProfit)}
           tone={performance.totalProfit >= 0 ? "profit" : "loss"}
         />
-        <StatCard label="Total trades" value={performance.totalTrades} />
-        <StatCard label="Win rate" value={formatPercent(performance.winRatePct)} />
+        <StatCard label={t.perf.totalTrades} value={performance.totalTrades} />
+        <StatCard label={t.perf.winRate} value={formatPercent(performance.winRatePct)} />
         <StatCard
-          label="Profit factor"
+          label={t.perf.profitFactor}
           value={performance.profitFactor === null ? "—" : performance.profitFactor}
-          hint={performance.profitFactor === null ? "No losing trades yet" : undefined}
+          hint={performance.profitFactor === null ? t.perf.noLosses : undefined}
         />
-        <StatCard label="Average win" value={formatCurrency(performance.averageProfit)} tone="profit" />
-        <StatCard label="Average loss" value={formatCurrency(performance.averageLoss)} tone="loss" />
-        <StatCard label="Wins / losses" value={`${performance.wins} / ${performance.losses}`} />
+        <StatCard label={t.perf.averageWin} value={formatCurrency(performance.averageProfit)} tone="profit" />
+        <StatCard label={t.perf.averageLoss} value={formatCurrency(performance.averageLoss)} tone="loss" />
+        <StatCard label={t.perf.winsLosses} value={`${performance.wins} / ${performance.losses}`} />
         <StatCard
-          label="Average latency"
+          label={t.perf.averageLatency}
           value={performance.averageLatencyMs === null ? "—" : `${performance.averageLatencyMs} ms`}
-          hint="Master event to broker fill"
+          hint={t.perf.latencyHint}
         />
       </div>
 
       <Card>
-        <CardHeader title="Daily profit" subtitle="Realised profit per day from copied trades" />
+        <CardHeader title={t.perf.dailyProfit} subtitle={t.perf.dailyProfitSubtitle} />
         <DailyProfitChart data={performance.dailyProfit} />
       </Card>
     </div>
   );
 }
 
-function Header() {
+function Header({ t }: { t: Dictionary }) {
   return (
     <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Performance</h1>
-      <p className="mt-1 text-sm text-muted">Computed from your recorded copy results only.</p>
+      <h1 className="text-2xl font-semibold tracking-tight">{t.perf.title}</h1>
+      <p className="mt-1 text-sm text-muted">{t.perf.subtitle}</p>
     </div>
   );
 }

@@ -7,8 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Pause, Play, Plus, Square, Trash2, X } from "lucide-react";
 import { Toast } from "@/components/ui/toast";
+import { useT } from "@/components/i18n/locale-provider";
 import { formatPercent } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-client/browser";
 
 export type AdminStrategyView = {
   id: string;
@@ -27,30 +30,39 @@ export type AdminStrategyView = {
   totalReturnPct: number;
 };
 
-const STATUS_ACTIONS: Record<string, { label: string; status: string; variant: "primary" | "secondary" | "danger" }[]> = {
-  DRAFT: [{ label: "Activate", status: "ACTIVE", variant: "primary" }],
-  ACTIVE: [
-    { label: "Pause", status: "PAUSED", variant: "secondary" },
-    { label: "Stop", status: "STOPPED", variant: "danger" },
-  ],
-  PAUSED: [
-    { label: "Resume", status: "ACTIVE", variant: "primary" },
-    { label: "Stop", status: "STOPPED", variant: "danger" },
-  ],
-  STOPPED: [{ label: "Activate", status: "ACTIVE", variant: "primary" }],
-  ARCHIVED: [],
-};
-
 export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] }) {
   const router = useRouter();
+  const t = useT();
   const [showForm, setShowForm] = useState(false);
+
+  const statusActions: Record<
+    string,
+    {
+      label: string;
+      status: string;
+      variant: "primary" | "secondary" | "danger";
+      Icon: typeof Play;
+    }[]
+  > = {
+    DRAFT: [{ label: t.strategyAdmin.activate, status: "ACTIVE", variant: "primary", Icon: Play }],
+    ACTIVE: [
+      { label: t.strategyAdmin.pause, status: "PAUSED", variant: "secondary", Icon: Pause },
+      { label: t.strategyAdmin.stop, status: "STOPPED", variant: "danger", Icon: Square },
+    ],
+    PAUSED: [
+      { label: t.strategyAdmin.resume, status: "ACTIVE", variant: "primary", Icon: Play },
+      { label: t.strategyAdmin.stop, status: "STOPPED", variant: "danger", Icon: Square },
+    ],
+    STOPPED: [{ label: t.strategyAdmin.activate, status: "ACTIVE", variant: "primary", Icon: Play }],
+    ARCHIVED: [],
+  };
   const [busy, setBusy] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   async function call(url: string, options: RequestInit) {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       headers: options.body ? { "Content-Type": "application/json" } : undefined,
       ...options,
     });
@@ -58,7 +70,7 @@ export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] 
       ok: boolean;
       error?: { message: string; details?: { path: string; message: string }[] };
     };
-    if (!res.ok || !json.ok) throw json.error ?? { message: "Request failed" };
+    if (!res.ok || !json.ok) throw json.error ?? { message: t.strategyAdmin.requestFailed };
     return json;
   }
 
@@ -67,7 +79,7 @@ export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] 
     let closeExistingPositions = false;
     if (status !== "ACTIVE") {
       closeExistingPositions = window.confirm(
-        "Close existing member positions as well?\n\nOK = close them, Cancel = keep them open.",
+        t.strategyAdmin.closePositionsPrompt,
       );
     }
 
@@ -80,21 +92,21 @@ export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] 
       setToast({ message: `Strategy set to ${status}`, tone: "success" });
       router.refresh();
     } catch (error) {
-      setToast({ message: (error as { message?: string }).message ?? "Request failed", tone: "error" });
+      setToast({ message: (error as { message?: string }).message ?? t.strategyAdmin.requestFailed, tone: "error" });
     } finally {
       setBusy(null);
     }
   }
 
   async function remove(id: string, name: string) {
-    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    if (!window.confirm(t.strategyAdmin.deleteConfirm.replace("{name}", name))) return;
     setBusy(`${id}:delete`);
     try {
       await call(`/api/admin/strategies/${id}`, { method: "DELETE" });
-      setToast({ message: "Strategy deleted", tone: "success" });
+      setToast({ message: t.strategyAdmin.deleted, tone: "success" });
       router.refresh();
     } catch (error) {
-      setToast({ message: (error as { message?: string }).message ?? "Request failed", tone: "error" });
+      setToast({ message: (error as { message?: string }).message ?? t.strategyAdmin.requestFailed, tone: "error" });
     } finally {
       setBusy(null);
     }
@@ -119,14 +131,14 @@ export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] 
           isPublic: form.get("isPublic") === "on",
         }),
       });
-      setToast({ message: "Strategy created as a draft", tone: "success" });
+      setToast({ message: t.strategyAdmin.createdDraft, tone: "success" });
       setShowForm(false);
       (event.target as HTMLFormElement).reset();
       router.refresh();
     } catch (error) {
       const err = error as { message?: string; details?: { path: string; message: string }[] };
       if (err.details) setFieldErrors(Object.fromEntries(err.details.map((d) => [d.path, d.message])));
-      setToast({ message: err.message ?? "Could not create the strategy", tone: "error" });
+      setToast({ message: err.message ?? t.strategyAdmin.couldNotCreate, tone: "error" });
     } finally {
       setSaving(false);
     }
@@ -134,19 +146,22 @@ export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] 
 
   return (
     <div className="space-y-5">
-      {!showForm && <Button onClick={() => setShowForm(true)}>New platform strategy</Button>}
+      {!showForm && <Button onClick={() => setShowForm(true)}>
+          <Plus className="h-4 w-4" />
+          {t.strategyAdmin.newPlatformStrategy}
+        </Button>}
 
       {showForm && (
         <Card>
-          <CardHeader title="New strategy" subtitle="Created as a draft; activate it when the master EA is ready." />
+          <CardHeader title={t.strategyAdmin.newStrategy} subtitle={t.strategyAdmin.newStrategySubtitle} />
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input name="code" label="Code" required placeholder="STRATEGY-001" error={fieldErrors.code} />
-              <Input name="name" label="Name" required placeholder="Gold Scalper Pro" error={fieldErrors.name} />
+              <Input name="code" label={t.strategyAdmin.code} required placeholder="STRATEGY-001" error={fieldErrors.code} />
+              <Input name="name" label={t.strategyAdmin.name} required placeholder="Gold Scalper Pro" error={fieldErrors.name} />
             </div>
             <div className="space-y-1.5">
               <label htmlFor="description" className="block text-sm font-medium">
-                Description
+                {t.strategyAdmin.description}
               </label>
               <textarea
                 id="description"
@@ -156,20 +171,22 @@ export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] 
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
-              <SelectField name="masterPlatform" label="Master platform" options={["MT5", "MT4"]} />
-              <Input name="masterAccountCode" label="Master account code" placeholder="MASTER-001" />
-              <SelectField name="minPlanTier" label="Minimum plan" options={["FREE", "BASIC", "PRO", "PREMIUM"]} />
+              <SelectField name="masterPlatform" label={t.strategyAdmin.masterPlatform} options={["MT5", "MT4"]} />
+              <Input name="masterAccountCode" label={t.strategyAdmin.masterAccountCode} placeholder="MASTER-001" />
+              <SelectField name="minPlanTier" label={t.strategyAdmin.minimumPlan} options={["FREE", "BASIC", "PRO", "PREMIUM"]} />
             </div>
             <label className="inline-flex items-center gap-2 text-sm">
               <input type="checkbox" name="isPublic" defaultChecked />
-              Listed publicly for members to subscribe
+              {t.strategyAdmin.listedPublicly}
             </label>
             <div className="flex gap-2">
               <Button type="submit" loading={saving}>
-                Create strategy
+                <Plus className="h-4 w-4" />
+                {t.strategyAdmin.createStrategy}
               </Button>
               <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
-                Cancel
+                <X className="h-4 w-4" />
+                {t.strategyAdmin.cancel}
               </Button>
             </div>
           </form>
@@ -177,28 +194,33 @@ export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] 
       )}
 
       {strategies.length === 0 ? (
-        <EmptyState title="No strategies yet" description="Create one, or approve a provider's draft." />
+        <EmptyState title={t.strategyAdmin.emptyTitle} description={t.strategyAdmin.emptyBody} />
       ) : (
         strategies.map((strategy) => (
           <Card key={strategy.id}>
             <CardHeader
               title={strategy.name}
               subtitle={`${strategy.code} · ${
-                strategy.ownerType === "PROVIDER" ? `provider: ${strategy.providerName}` : "platform owned"
-              } · master on ${strategy.masterPlatform}`}
+                strategy.ownerType === "PROVIDER"
+                  ? `${t.strategyAdmin.providerPrefix} ${strategy.providerName}`
+                  : t.strategyAdmin.platformOwned
+              } · ${t.strategyAdmin.masterOn} ${strategy.masterPlatform}`}
               action={<StatusBadge status={strategy.status} />}
             />
             {strategy.description && <p className="mb-4 text-sm text-muted">{strategy.description}</p>}
 
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-              <Metric label="Subscribers" value={String(strategy.subscribers)} />
-              <Metric label="Events received" value={String(strategy.events)} />
-              <Metric label="Return" value={formatPercent(strategy.totalReturnPct)} />
-              <Metric label="Visibility" value={strategy.isPublic ? "Public" : "Hidden"} />
+              <Metric label={t.strategyAdmin.subscribers} value={String(strategy.subscribers)} />
+              <Metric label={t.strategyAdmin.eventsReceived} value={String(strategy.events)} />
+              <Metric label={t.strategyAdmin.returnLabel} value={formatPercent(strategy.totalReturnPct)} />
+              <Metric
+                label={t.strategyAdmin.visibility}
+                value={strategy.isPublic ? t.strategyAdmin.public : t.strategyAdmin.hidden}
+              />
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              {(STATUS_ACTIONS[strategy.status] ?? []).map((action) => (
+              {(statusActions[strategy.status] ?? []).map((action) => (
                 <Button
                   key={action.status}
                   size="sm"
@@ -206,6 +228,7 @@ export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] 
                   loading={busy === `${strategy.id}:${action.status}`}
                   onClick={() => setStatus(strategy.id, action.status)}
                 >
+                  <action.Icon className="h-4 w-4" />
                   {action.label}
                 </Button>
               ))}
@@ -215,7 +238,8 @@ export function StrategyAdmin({ strategies }: { strategies: AdminStrategyView[] 
                 loading={busy === `${strategy.id}:delete`}
                 onClick={() => remove(strategy.id, strategy.name)}
               >
-                Delete
+                <Trash2 className="h-4 w-4" />
+                {t.strategyAdmin.delete}
               </Button>
             </div>
           </Card>

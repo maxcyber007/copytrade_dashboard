@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/api-client/auth";
 import { AppShell } from "@/components/app-shell";
 
 export default async function MemberLayout({ children }: { children: React.ReactNode }) {

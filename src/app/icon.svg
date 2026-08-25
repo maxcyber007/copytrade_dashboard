@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f0dca0" />
+      <stop offset="100%" stop-color="#c9a227" />
+    </linearGradient>
+  </defs>
+  <!-- Filled tile rather than an outline: a favicon is rendered at 16px over
+       browser chrome that may be light or dark, and a solid ground keeps the
+       gold mark legible on both. -->
+  <rect width="32" height="32" rx="8" fill="#0d0f14" />
+  <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="7.5" fill="none" stroke="url(#g)" stroke-opacity="0.45" stroke-width="1.5" />
+  <path
+    d="M6.5 22 L12.5 14.5 L18 19 L25.5 8.5"
+    fill="none"
+    stroke="url(#g)"
+    stroke-width="2.9"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="12.5" cy="14.5" r="2.3" fill="url(#g)" />
+  <circle cx="18" cy="19" r="2.3" fill="url(#g)" />
+</svg>

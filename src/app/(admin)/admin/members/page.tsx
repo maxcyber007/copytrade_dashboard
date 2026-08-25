@@ -1,61 +1,62 @@
-import { requireAdmin } from "@/lib/auth/session";
-import { userRepository } from "@/repositories/user.repository";
+import { requireAdmin } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { Table, Td, Th } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MemberActions } from "@/components/admin/member-actions";
+import { getDictionary } from "@/lib/i18n/server";
+import { formatDateTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminMembersPage() {
   const admin = await requireAdmin();
-  const members = await userRepository.list({ take: 200 });
+  const [{ members }, t] = await Promise.all([loadPageData("admin/members"), getDictionary()]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Members</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.admin.membersTitle}</h1>
         <p className="text-sm text-muted">
-          {members.length} account(s). Suspending stops a member trading immediately; deleting is
-          permanent and cascades to their accounts and history.
+          {t.admin.membersSubtitle.replace("{count}", String(members.length))}
         </p>
       </div>
 
       {members.length === 0 ? (
-        <EmptyState title="No members yet" />
+        <EmptyState title={t.admin.noMembers} />
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>Email</Th>
-              <Th>Name</Th>
-              <Th>Role</Th>
-              <Th>Status</Th>
-              <Th className="text-right">Accounts</Th>
-              <Th className="text-right">Subscriptions</Th>
-              <Th>Last login</Th>
-              <Th className="text-right">Actions</Th>
+              <Th>{t.admin.thEmail}</Th>
+              <Th>{t.admin.thName}</Th>
+              <Th>{t.admin.thRole}</Th>
+              <Th>{t.admin.thStatus}</Th>
+              <Th className="text-right">{t.admin.thAccounts}</Th>
+              <Th className="text-right">{t.admin.thSubscriptions}</Th>
+              <Th>{t.admin.thLastLogin}</Th>
+              <Th className="text-right">{t.admin.thActions}</Th>
             </tr>
           </thead>
           <tbody>
             {members.map((member) => {
-              const locked = member.lockedUntil && member.lockedUntil > new Date();
+              const locked = Boolean(member.lockedUntil && new Date(member.lockedUntil) > new Date());
               return (
                 <tr key={member.id}>
                   <Td>
                     {member.email}
-                    {member.id === admin.id && <span className="ml-2 text-xs text-muted">(you)</span>}
+                    {member.id === admin.id && <span className="ml-2 text-xs text-muted">{t.admin.you}</span>}
                   </Td>
                   <Td>{member.name ?? "—"}</Td>
                   <Td>{member.role}</Td>
                   <Td>
                     <StatusBadge status={member.status} />
-                    {locked && <span className="mt-1 block text-xs text-amber-500">locked out</span>}
+                    {locked && <span className="mt-1 block text-xs text-amber-500">{t.admin.lockedOut}</span>}
                   </Td>
                   <Td className="text-right tabular-nums">{member._count.tradingAccounts}</Td>
                   <Td className="text-right tabular-nums">{member._count.subscriptions}</Td>
                   <Td className="whitespace-nowrap text-xs">
-                    {member.lastLoginAt ? member.lastLoginAt.toLocaleString() : "never"}
+                    {formatDateTime(member.lastLoginAt) ?? t.admin.never}
                   </Td>
                   <Td>
                     <MemberActions
@@ -65,7 +66,7 @@ export default async function AdminMembersPage() {
                         name: member.name,
                         role: member.role,
                         status: member.status,
-                        lockedUntil: member.lockedUntil ? member.lockedUntil.toISOString() : null,
+                        lockedUntil: member.lockedUntil,
                         accounts: member._count.tradingAccounts,
                         subscriptions: member._count.subscriptions,
                       }}

@@ -24,12 +24,34 @@ import type {
  * Implementations: MockMT5Provider / MockMT4Provider (Phase 6), MetaApiProvider
  * (Phase 11, written against the official documentation at that time).
  */
+export type DeploymentState = "DEPLOYED" | "UNDEPLOYED" | "DEPLOYING" | "UNDEPLOYING" | "UNKNOWN";
+
 export interface ITradeProvider {
   /** Platforms this provider can serve. */
   readonly supportedPlatforms: readonly Platform[];
 
   connectAccount(input: ConnectAccountInput): Promise<ConnectionResult>;
   disconnectAccount(providerAccountId: string): Promise<void>;
+
+  /**
+   * Stops the provider running the account, without deleting it.
+   *
+   * Undeploying is what makes a disabled account stop costing anything at the
+   * provider while keeping its id valid, so enabling it again is a redeploy
+   * rather than a fresh account.
+   */
+  undeployAccount(providerAccountId: string): Promise<void>;
+  deployAccount(providerAccountId: string): Promise<void>;
+
+  /**
+   * What the provider currently reports for this account.
+   *
+   * Read separately from our own `isEnabled` flag: that records what the
+   * member asked for, this records what actually happened. They drift when a
+   * call fails, while a deploy is still settling, or when someone changes the
+   * account in the provider's own dashboard.
+   */
+  getDeploymentState(providerAccountId: string): Promise<DeploymentState>;
 
   getAccountInfo(providerAccountId: string): Promise<AccountInfo>;
   getPositions(providerAccountId: string): Promise<ProviderPosition[]>;

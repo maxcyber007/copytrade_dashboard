@@ -1,32 +1,29 @@
-import { requireUser } from "@/lib/auth/session";
-import { listNotifications, markAllRead } from "@/services/notification.service";
+import { requireUser } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage() {
-  const user = await requireUser();
-  const notifications = await listNotifications(user.id);
-
-  // Opening the page is what "read" means here.
-  await markAllRead(user.id);
+  await requireUser();
+  const [{ notifications }, t] = await Promise.all([loadPageData("notifications"), getDictionary()]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.member.notificationsTitle}</h1>
         <p className="mt-1 text-sm text-muted">
-          Risk limits, copy failures and account changes. Anything you need to know while away is
-          also emailed.
+          {t.member.notificationsSubtitle}
         </p>
       </div>
 
       {notifications.length === 0 ? (
         <EmptyState
-          title="Nothing to report"
-          description="Notifications appear here when a risk limit pauses copying, a copy fails, or an administrator changes your account."
+          title={t.member.notificationsEmptyTitle}
+          description={t.member.notificationsEmptyBody}
         />
       ) : (
         <div className="space-y-3">

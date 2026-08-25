@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { appRole } from "@/lib/runtime-config";
 
 /**
  * Central, validated access to environment variables.
@@ -7,6 +8,30 @@ import { z } from "zod";
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_URL: z.string().url().default("http://localhost:3000"),
+
+  /** See `@/lib/runtime-config` — validated here so a typo fails at startup. */
+  APP_ROLE: z.enum(["all", "api", "frontend"]).default("all"),
+  /** Where server-rendered pages reach the API. Defaults to APP_URL. */
+  API_BASE_URL: z.string().url().optional(),
+  /**
+   * Browser origins allowed to call this API with credentials, comma-separated.
+   * Required once the frontend lives on another domain; empty means same-origin
+   * only, which is what a single-host deployment wants.
+   */
+  ALLOWED_ORIGINS: z.string().default(""),
+  /**
+   * Domain the session cookie is issued for, e.g. `.trendxsynex.com`, so that
+   * `app.` and `api.` on that domain share one session. Unset issues a
+   * host-only cookie, which is correct for a single-host deployment.
+   */
+  SESSION_COOKIE_DOMAIN: z.string().optional(),
+  /**
+   * `lax` is safe while the frontend and API are on the same site — subdomains
+   * of one registrable domain count as same-site, so `app.` calling `api.`
+   * still sends the cookie. Only a genuinely cross-site frontend (a
+   * `*.vercel.app` preview, say) needs `none`, and `none` demands Secure.
+   */
+  SESSION_COOKIE_SAMESITE: z.enum(["lax", "none", "strict"]).default("lax"),
 
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
@@ -25,6 +50,14 @@ const schema = z.object({
   METAAPI_ACCOUNT_TYPE: z.enum(["cloud-g2", "cloud-g1"]).default("cloud-g2"),
   /** `high` is a paid MetaApi option billed at two resource slots. */
   METAAPI_RELIABILITY: z.enum(["regular", "high"]).default("regular"),
+  /**
+   * Balance below which the admin dashboard warns. MetaApi drains prepaid
+   * credit and simply stops serving accounts when it runs out, so the warning
+   * has to arrive well before zero.
+   */
+  METAAPI_LOW_BALANCE: z.coerce.number().nonnegative().default(20),
+  /** Runway below which the dashboard warns, in days. */
+  METAAPI_LOW_RUNWAY_DAYS: z.coerce.number().positive().default(7),
 
   MASTER_API_KEY: z.string().min(8),
   MASTER_API_SECRET: z.string().min(16),
@@ -58,6 +91,26 @@ const schema = z.object({
     .default("true")
     .transform((v) => v !== "false"),
 }).superRefine((env, ctx) => {
+  // `SameSite=None` is ignored by browsers unless the cookie is also Secure, so
+  // the session would silently stop being sent. Fail here instead.
+  if (env.SESSION_COOKIE_SAMESITE === "none" && env.NODE_ENV === "production" && !env.APP_URL.startsWith("https://")) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["SESSION_COOKIE_SAMESITE"],
+      message: "requires HTTPS — browsers drop SameSite=None cookies that are not Secure",
+    });
+  }
+
+  // A split frontend cannot reach the API without being told where it is, and
+  // the API cannot answer it without being told to allow its origin.
+  if (env.APP_ROLE === "api" && env.ALLOWED_ORIGINS.trim() === "") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["ALLOWED_ORIGINS"],
+      message: "required when APP_ROLE=api — list the frontend origins, e.g. https://app.example.com",
+    });
+  }
+
   // A missing token would otherwise surface as "the trading provider reported
   // an error" the first time a member presses Connect. A configuration mistake
   // belongs at startup, where whoever made it is looking.
@@ -74,8 +127,22 @@ export type Env = z.infer<typeof schema>;
 
 let cached: Env | null = null;
 
+/**
+ * Backend configuration: database, queues, provider tokens, signing secrets.
+ *
+ * Only the API deployment holds these. Reaching this from a frontend-role
+ * deployment means server-only code was pulled into the page bundle, which is
+ * a build mistake worth failing loudly rather than a missing variable to paper
+ * over — the frontend is supposed to hold no secrets at all.
+ */
 export function getEnv(): Env {
   if (cached) return cached;
+  if (appRole() === "frontend") {
+    throw new Error(
+      "getEnv() was called on a frontend deployment (APP_ROLE=frontend). " +
+        "Backend configuration does not exist here — read data through @/lib/api instead.",
+    );
+  }
   const parsed = schema.safeParse(process.env);
   if (!parsed.success) {
     const issues = parsed.error.issues

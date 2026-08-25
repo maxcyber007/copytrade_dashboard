@@ -85,6 +85,20 @@ export async function startSession(userId: string, meta: RequestMeta) {
   return createSession(userId, meta);
 }
 
-function toSessionUser(user: { id: string; email: string; name: string | null; role: "ADMIN" | "MEMBER" }): SessionUser {
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+function toSessionUser(user: {
+  id: string;
+  email: string;
+  name: string | null;
+  role: "ADMIN" | "MEMBER";
+  avatarUpdatedAt?: Date | null;
+}): SessionUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    // Sign-in does not select the stamp; the shell reads it from the session
+    // lookup on the next request, which does.
+    avatarUpdatedAt: user.avatarUpdatedAt ?? null,
+  };
 }

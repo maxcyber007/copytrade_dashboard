@@ -1,36 +1,37 @@
-import { requireAdmin } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/api-client/auth";
+import { loadPageData } from "@/lib/api-client/page-data";
 import { Table, Td, Th } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminErrorsPage() {
   await requireAdmin();
-  const errors = await prisma.systemError.findMany({ take: 100, orderBy: { createdAt: "desc" } });
+  const [{ errors }, t] = await Promise.all([loadPageData("admin/errors"), getDictionary()]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">System errors</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.admin.errorsTitle}</h1>
         <p className="text-sm text-muted">
-          Technical detail for administrators. Members only ever see the mapped, non-technical message.
+          {t.admin.errorsSubtitle}
         </p>
       </div>
 
       {errors.length === 0 ? (
-        <EmptyState title="No system errors recorded" description="Errors raised by the API, workers or providers land here." />
+        <EmptyState title={t.admin.noErrors} description={t.admin.noErrorsBody} />
       ) : (
         <Table>
           <thead>
             <tr>
-              <Th>Time</Th>
-              <Th>Code</Th>
-              <Th>Severity</Th>
-              <Th>Source</Th>
-              <Th>Message</Th>
-              <Th>Resolved</Th>
+              <Th>{t.admin.thTime}</Th>
+              <Th>{t.admin.thCode}</Th>
+              <Th>{t.admin.thSeverity}</Th>
+              <Th>{t.admin.thSource}</Th>
+              <Th>{t.admin.thMessage}</Th>
+              <Th>{t.admin.thResolved}</Th>
             </tr>
           </thead>
           <tbody>
@@ -43,7 +44,7 @@ export default async function AdminErrorsPage() {
                 </Td>
                 <Td className="text-xs">{error.source}</Td>
                 <Td className="max-w-md text-xs">{error.message}</Td>
-                <Td className="text-xs">{error.resolvedAt ? error.resolvedAt.toLocaleString() : "open"}</Td>
+                <Td className="text-xs">{error.resolvedAt ? error.resolvedAt.toLocaleString() : t.admin.open}</Td>
               </tr>
             ))}
           </tbody>

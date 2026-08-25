@@ -2,20 +2,24 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
+import { ArrowRight, CalendarX, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toast } from "@/components/ui/toast";
 import type { PlanView } from "@/services/subscription.service";
+import { useT } from "@/components/i18n/locale-provider";
+import { plural } from "@/lib/i18n/format";
+import { apiFetch } from "@/lib/api-client/browser";
 
 export function BillingPlans({ plans, canCancel }: { plans: PlanView[]; canCancel: boolean }) {
   const router = useRouter();
+  const t = useT();
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
 
   async function choose(plan: PlanView) {
     setBusy(plan.id);
     try {
-      const res = await fetch("/api/billing/subscribe", {
+      const res = await apiFetch("/api/billing/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ planId: plan.id }),
@@ -25,7 +29,7 @@ export function BillingPlans({ plans, canCancel }: { plans: PlanView[]; canCance
         data?: { status: string; redirectUrl: string | null };
         error?: { message: string };
       };
-      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? "Could not change plan");
+      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? t.billing.couldNotChange);
 
       // A real gateway sends the member away to pay; the mock settles at once.
       if (json.data?.redirectUrl) {
@@ -33,26 +37,26 @@ export function BillingPlans({ plans, canCancel }: { plans: PlanView[]; canCance
         return;
       }
 
-      setToast({ message: `You are now on the ${plan.name} plan`, tone: "success" });
+      setToast({ message: t.billing.nowOnPlan.replace("{name}", plan.name), tone: "success" });
       router.refresh();
     } catch (error) {
-      setToast({ message: error instanceof Error ? error.message : "Request failed", tone: "error" });
+      setToast({ message: error instanceof Error ? error.message : t.billing.requestFailed, tone: "error" });
     } finally {
       setBusy(null);
     }
   }
 
   async function cancel() {
-    if (!window.confirm("Cancel at the end of the current period? Access continues until then.")) return;
+    if (!window.confirm(t.billing.cancelConfirm)) return;
     setBusy("cancel");
     try {
-      const res = await fetch("/api/billing/cancel", { method: "POST" });
+      const res = await apiFetch("/api/billing/cancel", { method: "POST" });
       const json = (await res.json()) as { ok: boolean; error?: { message: string } };
-      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? "Could not cancel");
-      setToast({ message: "Your plan will end at the close of this period", tone: "success" });
+      if (!res.ok || !json.ok) throw new Error(json.error?.message ?? t.billing.couldNotCancel);
+      setToast({ message: t.billing.willEnd, tone: "success" });
       router.refresh();
     } catch (error) {
-      setToast({ message: error instanceof Error ? error.message : "Request failed", tone: "error" });
+      setToast({ message: error instanceof Error ? error.message : t.billing.requestFailed, tone: "error" });
     } finally {
       setBusy(null);
     }
@@ -72,28 +76,28 @@ export function BillingPlans({ plans, canCancel }: { plans: PlanView[]; canCance
                 className="mb-2 inline-flex w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide"
                 style={{ background: "var(--gold-glow)", color: "var(--gold)" }}
               >
-                Current
+                {t.billing.current}
               </span>
             )}
             <h3 className="text-base font-semibold">{plan.name}</h3>
             <p className="mt-2 flex items-baseline gap-1">
               <span className="text-2xl font-semibold tabular-nums">
-                {plan.priceMonthly === 0 ? "Free" : `$${plan.priceMonthly}`}
+                {plan.priceMonthly === 0 ? t.common.free : `$${plan.priceMonthly}`}
               </span>
-              {plan.priceMonthly > 0 && <span className="text-sm text-muted">/mo</span>}
+              {plan.priceMonthly > 0 && <span className="text-sm text-muted">{t.billing.perMonth}</span>}
             </p>
 
             <ul className="mt-4 flex-1 space-y-2 text-sm">
               <li className="flex gap-2">
                 <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--gold)" }} />
                 <span className="text-muted">
-                  {plan.maxAccounts} trading {plan.maxAccounts === 1 ? "account" : "accounts"}
+                  {plural(t.billing.accounts, plan.maxAccounts)}
                 </span>
               </li>
               <li className="flex gap-2">
                 <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--gold)" }} />
                 <span className="text-muted">
-                  {plan.maxStrategies} {plan.maxStrategies === 1 ? "strategy" : "strategies"}
+                  {plural(t.billing.strategies, plan.maxStrategies)}
                 </span>
               </li>
               {plan.features.map((feature) => (
@@ -112,20 +116,25 @@ export function BillingPlans({ plans, canCancel }: { plans: PlanView[]; canCance
               loading={busy === plan.id}
               onClick={() => choose(plan)}
             >
-              {plan.current ? "Current plan" : plan.priceMonthly === 0 ? "Switch to Free" : "Choose plan"}
+              {plan.current ? <Check className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
+              {plan.current
+                ? t.billing.currentPlan
+                : plan.priceMonthly === 0
+                  ? t.billing.switchToFree
+                  : t.billing.choosePlan}
             </Button>
           </article>
         ))}
       </div>
 
       <p className="text-xs text-muted">
-        Payments run through a provider interface. The development provider settles immediately and
-        collects no card details — no real charge is made.
+        {t.billing.gatewayNote}
       </p>
 
       {canCancel && (
         <Button variant="ghost" size="sm" loading={busy === "cancel"} onClick={cancel}>
-          Cancel at period end
+          <CalendarX className="h-4 w-4" />
+          {t.billing.cancelAtPeriodEnd}
         </Button>
       )}
 
