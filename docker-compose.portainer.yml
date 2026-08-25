@@ -1,0 +1,167 @@
+# Backend stack for Portainer, deployed straight from the Git repository.
+#
+# Portainer  →  Stacks  →  Add stack  →  Repository
+#   Repository URL  https://github.com/maxcyber007/copytrade_dashboard
+#   Reference       refs/heads/claude/mt5-copy-trading-platform-18th6m
+#   Compose path    docker-compose.portainer.yml
+#
+# Differences from docker-compose.yml, and why:
+#
+#  - No nginx and no certbot. nginx-proxy-manager already owns 80 and 443 on
+#    this host and already holds a valid certificate for itdev.cmtc.ac.th.
+#
+#  - No published ports at all. The app joins nginx-proxy-manager's network and
+#    is reached there by container name, so nothing is exposed on the host —
+#    and nothing can collide with the containers already using 3000, 3333, 5432
+#    and the rest.
+#
+#  - `env_file` is not used, because `.env` is gitignored and never reaches the
+#    repository. Every value comes from the stack's Environment variables
+#    instead, which is also where they belong: secrets stay in Portainer rather
+#    than in Git.
+#
+#  - A one-shot `migrate` service. The Dockerfile runs neither `prisma migrate
+#    deploy` nor anything like it, so without this the app would start against a
+#    database with no tables.
+
+x-app-env: &app-env
+  NODE_ENV: production
+  APP_ROLE: api
+  APP_URL: ${APP_URL:?set to https://itdev.cmtc.ac.th}
+
+  DATABASE_URL: postgresql://${POSTGRES_USER:-copytrade}:${POSTGRES_PASSWORD:?set a strong password}@postgres:5432/${POSTGRES_DB:-copytrade}?schema=public
+  REDIS_URL: redis://redis:6379
+
+  # Exact match, no trailing slash. Required when APP_ROLE=api: without it every
+  # write from the frontend is refused as cross-origin.
+  ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?e.g. https://copytrade-dashboard.vercel.app}
+
+  # Both stay empty while the frontend is on Vercel's own domain: the cookie is
+  # set on that domain, and there is no shared parent domain to scope it to.
+  SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
+  SESSION_COOKIE_SAMESITE: ${SESSION_COOKIE_SAMESITE:-lax}
+
+  AUTH_SECRET: ${AUTH_SECRET:?openssl rand -base64 48}
+  SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-604800}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?openssl rand -base64 32}
+
+  TRADING_PROVIDER: ${TRADING_PROVIDER:-mock}
+  METAAPI_TOKEN: ${METAAPI_TOKEN:-}
+  METAAPI_REGION: ${METAAPI_REGION:-new-york}
+  METAAPI_ACCOUNT_TYPE: ${METAAPI_ACCOUNT_TYPE:-cloud-g2}
+  METAAPI_RELIABILITY: ${METAAPI_RELIABILITY:-regular}
+  METAAPI_LOW_BALANCE: ${METAAPI_LOW_BALANCE:-20}
+  METAAPI_LOW_RUNWAY_DAYS: ${METAAPI_LOW_RUNWAY_DAYS:-7}
+
+  MASTER_API_KEY: ${MASTER_API_KEY:?openssl rand -hex 16}
+  MASTER_API_SECRET: ${MASTER_API_SECRET:?openssl rand -hex 32}
+  MASTER_EVENT_MAX_SKEW_SECONDS: ${MASTER_EVENT_MAX_SKEW_SECONDS:-60}
+
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
+
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+  EMAIL_FROM: ${EMAIL_FROM:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  PASSWORD_RESET_TTL_MINUTES: ${PASSWORD_RESET_TTL_MINUTES:-30}
+
+  SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-60}
+  STATS_INTERVAL_SECONDS: ${STATS_INTERVAL_SECONDS:-300}
+  MASTER_WATCH_SECONDS: ${MASTER_WATCH_SECONDS:-15}
+
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: copytrade_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-copytrade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong password}
+      POSTGRES_DB: ${POSTGRES_DB:-copytrade}
+    volumes:
+      - copytrade_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-copytrade}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: copytrade_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - copytrade_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Runs once per deployment and exits. The app and the worker wait for it to
+  # succeed, so a failed migration stops the release instead of leaving a
+  # half-migrated database serving traffic.
+  migrate:
+    build:
+      context: .
+      target: worker
+    container_name: copytrade_migrate
+    restart: "no"
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: web
+    container_name: copytrade_app
+    restart: unless-stopped
+    environment: *app-env
+    networks:
+      - default
+      # Reached by nginx-proxy-manager as http://copytrade_app:3000
+      - proxy
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      target: worker
+    container_name: copytrade_worker
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+networks:
+  # nginx-proxy-manager's own network, so it can resolve `copytrade_app`.
+  # Find the exact name under Portainer -> Networks; for a stack named
+  # nginx-proxy-manager it is usually nginx-proxy-manager_default.
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:?the network nginx-proxy-manager is attached to}
+
+volumes:
+  copytrade_postgres:
+  copytrade_redis:
