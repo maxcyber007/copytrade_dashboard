@@ -32,15 +32,32 @@ export const servesPages = () => appRole() !== "api";
 const stripTrailingSlash = (url: string) => url.replace(/\/+$/, "");
 
 /**
+ * An environment variable's value, or undefined when it is unset *or blank*.
+ *
+ * Several of these are deliberately left empty on one deployment and filled in
+ * on another, and a platform passes an empty field through as `""`. `??` does
+ * not fall back on an empty string, so reading them with it yields `""` where a
+ * default was meant — which is how an empty `APP_URL` would become an empty API
+ * base URL, and every server-rendered fetch would fail on a relative address.
+ *
+ * Callers pass `process.env.SOME_NAME` literally rather than a computed key,
+ * because Next.js only substitutes the literal form into client bundles.
+ */
+const set = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+/**
  * Where server-rendered pages reach the API.
  *
  * Defaults to this deployment's own origin, so a single-host install calls
  * itself over loopback and behaves exactly as it did before the split.
  */
 export function apiBaseUrl(): string {
-  const explicit = process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL;
+  const explicit = set(process.env.API_BASE_URL) ?? set(process.env.NEXT_PUBLIC_API_BASE_URL);
   if (explicit) return stripTrailingSlash(explicit);
-  return stripTrailingSlash(process.env.APP_URL ?? "http://localhost:3000");
+  return stripTrailingSlash(set(process.env.APP_URL) ?? "http://localhost:3000");
 }
 
 /**
@@ -52,7 +69,7 @@ export function apiBaseUrl(): string {
  * origin", which is what a single-host deployment wants.
  */
 export function publicApiBaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const raw = set(process.env.NEXT_PUBLIC_API_BASE_URL);
   return raw ? stripTrailingSlash(raw) : "";
 }
 
@@ -88,12 +105,12 @@ export function isAllowedOrigin(origin: string | null): boolean {
  * because then they are already same-site.
  */
 export function apiProxyTarget(): string {
-  const raw = process.env.API_PROXY_TARGET;
+  const raw = set(process.env.API_PROXY_TARGET);
   return raw ? stripTrailingSlash(raw) : "";
 }
 
 /** Hostname that serves the marketing site, when it is split from the app. */
-export const landingHost = () => process.env.NEXT_PUBLIC_LANDING_HOST ?? "";
+export const landingHost = () => set(process.env.NEXT_PUBLIC_LANDING_HOST) ?? "";
 
 /** Hostname that serves the signed-in dashboard, when it is split off. */
-export const dashboardHost = () => process.env.NEXT_PUBLIC_DASHBOARD_HOST ?? "";
+export const dashboardHost = () => set(process.env.NEXT_PUBLIC_DASHBOARD_HOST) ?? "";
